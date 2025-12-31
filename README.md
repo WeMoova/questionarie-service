@@ -1,230 +1,318 @@
-# questionarie-service
+# Questionnaire Service - NOM-035 Management System
 
-Servicio de administracion de cuestionarios de WeMoova
+Sistema completo de gestión de cuestionarios inspirado en NOM-035 (Norma Mexicana de Riesgos Psicosociales) con soporte para múltiples tipos de preguntas, asignación jerárquica por roles, y reportes agregados por empresa.
 
-## Overview
+## 📋 Tabla de Contenidos
 
-This microservice is part of the WeMoova platform and is deployed via GitOps using Argo CD.
+- [Características](#características)
+- [Arquitectura](#arquitectura)
+- [Requisitos](#requisitos)
+- [Instalación](#instalación)
+- [Configuración](#configuración)
+- [Roles y Permisos](#roles-y-permisos)
+- [API Endpoints](#api-endpoints)
+- [Modelos de Datos](#modelos-de-datos)
+- [Flujo de Uso](#flujo-de-uso)
+- [Deployment](#deployment)
 
-**Technology Stack:**
-- **Language**: Go 1.21+
-- **Router**: Chi
-- **Database**: PostgreSQL (shared RDS with schema isolation)
-- **Authentication**: FusionAuth JWT
+## ✨ Características
 
-## API Endpoints
+### Gestión de Cuestionarios
+- ✅ Creación de cuestionarios con múltiples tipos de preguntas
+- ✅ Tipos de preguntas: Opción múltiple, Escala Likert, Texto libre, Sí/No
+- ✅ Activación/desactivación de cuestionarios
+- ✅ Gestión de preguntas embebidas (CRUD completo)
 
-### Public Endpoints
+### Gestión de Empresas
+- ✅ CRUD de empresas
+- ✅ Asignación de cuestionarios a empresas con períodos definidos
+- ✅ Gestión de períodos de respuesta
 
-- `GET /health` - Basic health check
-- `GET /ready` - Readiness probe (checks database connection)
-- `GET /live` - Liveness probe
+### Gestión de Usuarios
+- ✅ Autenticación 100% via FusionAuth
+- ✅ 4 niveles de roles: Super Admin, Company Admin, Supervisor, Employee
+- ✅ Metadata de usuarios vinculada a empresas
+- ✅ Jerarquía de supervisores
 
-### Protected Endpoints
+### Asignaciones
+- ✅ Asignación de cuestionarios a empleados
+- ✅ Validación de períodos activos
+- ✅ Estados: Pendiente, En Progreso, Completado
+- ✅ Prevención de asignaciones duplicadas
 
-All other endpoints require a valid JWT token from FusionAuth.
+### Respuestas
+- ✅ Guardado incremental de respuestas
+- ✅ Validación de preguntas requeridas
+- ✅ Respuestas embebidas en asignaciones
+- ✅ Historial completo
 
-**Example:**
-```bash
-curl -H "Authorization: Bearer <token>" \
-  https://services.wemoova.com/questionarie-service/api/v1/example
+### Reportes y Métricas
+- ✅ Reportes agregados por empresa (sin datos individuales)
+- ✅ Métricas de completitud detalladas
+- ✅ Estadísticas por departamento
+- ✅ Tiempo promedio de completitud
+- ✅ Overview de empresa con todos los cuestionarios
+
+## 🏗 Arquitectura
+
+### Stack Tecnológico
+- **Lenguaje**: Go 1.21+
+- **Framework Web**: Chi v5
+- **Base de Datos**: MongoDB 5.0+
+- **Autenticación**: FusionAuth (JWT con JWKS)
+- **Deployment**: Docker + Kubernetes
+
+### Patrón de Diseño
+```
+Clean Architecture con capas separadas:
+
+┌─────────────────────────────────────┐
+│         HTTP Handlers               │  ← Entrada HTTP
+├─────────────────────────────────────┤
+│      Middleware (JWT, RBAC)         │  ← Autenticación/Autorización
+├─────────────────────────────────────┤
+│         Services                     │  ← Lógica de negocio
+├─────────────────────────────────────┤
+│         Repositories                 │  ← Acceso a datos
+├─────────────────────────────────────┤
+│         MongoDB                      │  ← Persistencia
+└─────────────────────────────────────┘
 ```
 
-## Local Development
+### Modelo de Datos MongoDB
 
-### Prerequisites
+**Colecciones:**
+- `companies` - Empresas
+- `questionnaires` - Cuestionarios con preguntas embebidas
+- `company_questionnaires` - Asignaciones de cuestionarios a empresas
+- `user_questionnaire_assignments` - Asignaciones a usuarios con respuestas embebidas
+- `users_metadata` - Metadata de usuarios (vinculación con empresas)
 
-- Go 1.21 or higher
-- PostgreSQL 15+
-- FusionAuth instance
+**Ventajas del diseño:**
+- Preguntas embebidas → 1 consulta en vez de JOINs
+- Respuestas embebidas → Histórico completo sin fragmentación
+- Esquema flexible para diferentes tipos de preguntas
+- Agregaciones nativas de MongoDB para reportes
 
-### Setup
+## 📦 Requisitos
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/WeMoova/questionarie-service.git
-   cd questionarie-service
-   ```
+- Go 1.21 o superior
+- MongoDB 5.0 o superior
+- FusionAuth configurado (ver [FUSIONAUTH_SETUP.md](docs/FUSIONAUTH_SETUP.md))
+- Docker (opcional, para deployment)
 
-2. **Configure environment variables:**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your local configuration
-   ```
+## 🚀 Instalación
 
-3. **Install dependencies:**
-   ```bash
-   go mod download
-   ```
-
-4. **Run database migrations:**
-   ```bash
-   goose -dir migrations postgres "postgresql://user:password@localhost:5432/dbname?search_path=questionarie_service" up
-   ```
-
-5. **Start the development server:**
-   ```bash
-   go run main.go
-   ```
-
-The server will start on `http://localhost:8080`
-
-## Database
-
-This service uses a **shared PostgreSQL RDS instance** with **schema isolation**. Each service has its own schema:
-
-- Schema name: `questionarie_service`
-- All queries automatically use `search_path` to target the correct schema
-
-### Migrations
-
-**Create a new migration:**
+### 1. Clonar el repositorio
 ```bash
-goose -dir migrations create <migration_name> sql
+git clone <repository-url>
+cd questionarie-service
 ```
 
-**Run migrations:**
+### 2. Instalar dependencias
 ```bash
-goose -dir migrations postgres "postgresql://..." up
+go mod download
 ```
 
-**Rollback:**
+### 3. Configurar variables de entorno
 ```bash
-goose -dir migrations postgres "postgresql://..." down
+cp .env.example .env
+# Editar .env con tus valores
 ```
 
-## Authentication
-
-This service uses **FusionAuth** for authentication. All protected endpoints require a valid JWT token.
-
-### Getting a Token
-
-1. Login via FusionAuth:
-   ```bash
-   curl -X POST https://auth.wemoova.com/api/login \
-     -H "Content-Type: application/json" \
-     -d '{"loginId":"user@example.com","password":"password"}'
-   ```
-
-2. Extract the `token` from the response
-
-3. Use the token in API requests:
-   ```bash
-   curl -H "Authorization: Bearer <token>" \
-     https://services.wemoova.com/questionarie-service/api/v1/example
-   ```
-
-## Deployment
-
-This service uses **GitHub Actions** for CI/CD and **Argo CD** for GitOps deployment.
-
-### Environments
-
-- **QA**: `https://qa.services.wemoova.com/questionarie-service/`
-- **Production**: `https://services.wemoova.com/questionarie-service/`
-
-### Deploying to QA
-
+### 4. Crear índices en MongoDB
 ```bash
-gh release create v1.0.0-qa --generate-notes
+mongosh <MONGODB_URI> < scripts/init_mongodb_indexes.js
 ```
 
-### Deploying to Production
-
+### 5. Ejecutar el servicio
 ```bash
-gh release create v1.0.0 --generate-notes
+go run main.go
 ```
 
-### Deployment Flow
+El servicio estará disponible en `http://localhost:8080`
 
-1. Create GitHub release (with tag `vX.X.X` or `vX.X.X-qa`)
-2. GitHub Actions builds Docker image
-3. Image pushed to `ghcr.io/WeMoova/questionarie-service:<tag>`
-4. GitHub Actions updates Kustomize manifests in `argo-apps` repo
-5. Argo CD detects change and deploys to Kubernetes
+## ⚙️ Configuración
 
-## Monitoring
+### Variables de Entorno
+
+```bash
+# Server
+PORT=8080
+ENV=development
+
+# MongoDB
+MONGODB_URI=mongodb://localhost:27017
+MONGODB_DATABASE=questionarie_db
+MONGODB_TIMEOUT=10s
+
+# FusionAuth
+FUSIONAUTH_URL=https://auth.wemoova.com
+
+# CORS
+CORS_ORIGINS=*
+```
+
+### Configuración de FusionAuth
+
+Ver guía completa en [docs/FUSIONAUTH_SETUP.md](docs/FUSIONAUTH_SETUP.md)
+
+**Resumen:**
+1. Crear aplicación en FusionAuth
+2. Configurar roles: `super_admin`, `company_admin`, `supervisor`, `employee`
+3. Configurar JWT issuer y audience
+4. Obtener JWKS endpoint
+
+## 👥 Roles y Permisos
+
+### Super Admin (`super_admin`)
+- ✅ Crear/editar/desactivar cuestionarios
+- ✅ Gestionar preguntas
+- ✅ Crear/editar empresas
+- ✅ Asignar cuestionarios a empresas
+- ✅ Crear/editar user metadata
+- ✅ Acceso a todos los reportes
+
+### Company Admin (`company_admin`)
+- ✅ Ver cuestionarios asignados a SU empresa
+- ✅ Asignar cuestionarios a empleados de SU empresa
+- ✅ Ver reportes de SU empresa
+- ❌ No puede ver otras empresas
+
+### Supervisor (`supervisor`)
+- ✅ Ver cuestionarios de su empresa
+- ✅ Asignar cuestionarios a SU equipo
+- ✅ Ver progreso de SU equipo
+- ✅ Ver reportes de su equipo
+- ❌ No puede asignar a empleados de otros supervisores
+
+### Employee (`employee`)
+- ✅ Ver cuestionarios asignados a SÍ MISMO
+- ✅ Responder cuestionarios
+- ✅ Ver su propio progreso
+- ❌ No puede ver respuestas de otros
+
+## 🔌 API Endpoints
+
+### Swagger UI Documentation
+
+El servicio incluye **Swagger UI** para explorar y probar todos los endpoints de forma interactiva:
+
+```
+🌐 Swagger UI: http://localhost:8080/questionarie-service/swagger/
+📄 OpenAPI JSON: http://localhost:8080/questionarie-service/swagger/doc.json
+```
+
+**Características de Swagger UI:**
+- ✅ Documentación interactiva de todos los endpoints
+- ✅ Prueba de endpoints directamente desde el navegador
+- ✅ Autenticación con token JWT (botón "Authorize")
+- ✅ Ejemplos de request/response para cada endpoint
+- ✅ Filtrado por tags (Questionnaires, Companies, Assignments, Reports, etc.)
+
+**Cómo usar Swagger UI:**
+1. Inicia el servicio: `go run main.go`
+2. Abre en tu navegador: `http://localhost:8080/questionarie-service/swagger/`
+3. Haz clic en "Authorize" e ingresa: `Bearer {tu-jwt-token}`
+4. Explora y prueba los endpoints
 
 ### Health Checks
-
-- **Health**: `GET /health` - Basic service health
-- **Ready**: `GET /ready` - Service + database readiness
-- **Live**: `GET /live` - Service liveness
-
-### Logs
-
-**View logs in Kubernetes:**
-```bash
-# Production
-kubectl logs -f deployment/questionarie-service -n questionarie-service
-
-# QA
-kubectl logs -f deployment/questionarie-service-qa -n questionarie-service-qa
+```
+GET  /questionarie-service/health        - Health check
+GET  /questionarie-service/ready         - Readiness check (incluye MongoDB)
 ```
 
-## Architecture
+### Questionnaires (Super Admin)
+```
+POST   /api/v1/questionnaires                           - Crear cuestionario
+GET    /api/v1/questionnaires                           - Listar cuestionarios
+GET    /api/v1/questionnaires/:id                       - Obtener cuestionario
+PUT    /api/v1/questionnaires/:id                       - Actualizar cuestionario
+DELETE /api/v1/questionnaires/:id                       - Desactivar cuestionario
 
-### Path-Based Routing
+POST   /api/v1/questionnaires/:id/questions             - Agregar pregunta
+PUT    /api/v1/questionnaires/:id/questions/:question_id - Actualizar pregunta
+DELETE /api/v1/questionnaires/:id/questions/:question_id - Eliminar pregunta
+```
 
-This service is accessible via path-based routing on a shared ALB:
+### Companies (Super Admin)
+```
+POST   /api/v1/companies                  - Crear empresa
+GET    /api/v1/companies                  - Listar empresas
+GET    /api/v1/companies/:id              - Obtener empresa
+PUT    /api/v1/companies/:id              - Actualizar empresa
 
-- Production: `https://services.wemoova.com/questionarie-service/*`
-- QA: `https://qa.services.wemoova.com/questionarie-service/*`
+POST   /api/v1/companies/:company_id/questionnaires  - Asignar cuestionario a empresa
+GET    /api/v1/companies/:company_id/questionnaires  - Listar cuestionarios de empresa
+```
 
-The ALB automatically strips the `/questionarie-service` prefix before forwarding to the service, so your application sees:
-- `https://services.wemoova.com/questionarie-service/api/v1/users` → `/api/v1/users`
+### User Metadata (Super Admin)
+```
+POST   /api/v1/users/metadata              - Crear metadata de usuario
+GET    /api/v1/users/metadata/:user_id     - Obtener metadata
+PUT    /api/v1/users/metadata/:user_id     - Actualizar metadata
+DELETE /api/v1/users/metadata/:user_id     - Eliminar metadata
 
-### Kubernetes Resources
+GET    /api/v1/companies/:company_id/users - Listar usuarios de empresa
+```
 
-- **Namespace**: `questionarie-service` (production) or `questionarie-service-qa` (QA)
-- **Deployment**: Manages pod replicas
-- **Service**: ClusterIP on port 8080
-- **Ingress**: ALB with path-based routing
-- **ConfigMap**: Non-sensitive configuration
-- **Secret**: Database credentials
+### Assignments (Company Admin, Supervisor)
+```
+POST   /api/v1/company-questionnaires/:cq_id/assignments  - Asignar a usuarios
+GET    /api/v1/company-questionnaires/:cq_id/assignments  - Listar asignaciones
+GET    /api/v1/my-company/questionnaires                  - Cuestionarios de mi empresa
+GET    /api/v1/my-team/assignments                        - Asignaciones de mi equipo
+```
 
-## Development Guidelines
+### Responses (Employee)
+```
+GET    /api/v1/my-assignments               - Mis cuestionarios asignados
+GET    /api/v1/assignments/:id              - Detalle de asignación
 
-### Code Style
+POST   /api/v1/assignments/:id/responses    - Guardar respuesta
+PUT    /api/v1/assignments/:id/responses    - Actualizar múltiples respuestas
+POST   /api/v1/assignments/:id/submit       - Enviar cuestionario completado
+```
 
-- Follow standard Go formatting (`gofmt`)
-- Use `golangci-lint` for linting
-- Write tests for all handlers
+### Reports (Company Admin, Supervisor)
+```
+GET    /api/v1/reports/company-questionnaire/:cq_id/completion  - Métricas de completitud
+GET    /api/v1/reports/company/:company_id/overview             - Overview de empresa
+GET    /api/v1/reports/company/:company_id/employees-progress   - Progreso de empleados
+```
 
-### Adding New Endpoints
+## 📚 Documentación Adicional
 
-1. Create handler/route file
-2. Register route in main application
-3. Add authentication middleware if needed
-4. Write tests
-5. Update this README
+- [FusionAuth Setup Guide](docs/FUSIONAUTH_SETUP.md) - Configuración de autenticación
+- [API Examples](docs/API_EXAMPLES.md) - Ejemplos completos de uso
+- [Postman Collection](postman_collection.json) - Collection para testing
 
-## Troubleshooting
+## 🐳 Deployment
 
-### Database Connection Issues
+### Docker
+```bash
+docker build -t questionarie-service .
+docker run -p 8080:8080 \
+  -e MONGODB_URI=mongodb://host:27017 \
+  -e MONGODB_DATABASE=questionarie_db \
+  -e FUSIONAUTH_URL=https://auth.wemoova.com \
+  questionarie-service
+```
 
-- Verify `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` in `.env`
-- Check if PostgreSQL is running and accessible
-- Verify schema exists: `SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'questionarie_service';`
+## 🧪 Testing
 
-### Authentication Issues
+```bash
+# Unit tests
+go test ./...
 
-- Verify `FUSIONAUTH_URL` is correct
-- Check token expiration
-- Ensure JWKS endpoint is accessible: `curl https://auth.wemoova.com/.well-known/jwks.json`
+# Con coverage
+go test -cover ./...
+```
 
-### Deployment Issues
+## 📝 License
 
-- Check GitHub Actions workflow logs
-- Check Argo CD application status: `kubectl get applications -n argocd`
-- Verify Kustomize manifests: `kubectl kustomize manifests/overlays/production`
+This project is licensed under the MIT License.
 
-## Support
+---
 
-For issues or questions:
-- GitHub Issues: https://github.com/WeMoova/questionarie-service/issues
-- WeMoova Team: team@wemoova.com
-
-## License
-
-MIT License - WeMoova © 2024
+**Generado con** [Claude Code](https://claude.com/claude-code)
