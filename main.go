@@ -136,6 +136,9 @@ func main() {
 				r.Post("/api/v1/companies/{company_id}/questionnaires", companyHandler.AssignQuestionnaireToCompany)
 			})
 
+			// === User Metadata - Get My Metadata (All authenticated users) ===
+			r.Get("/api/v1/users/me/metadata", userMetadataHandler.GetMyMetadata)
+
 			// === User Metadata (Super Admin only) ===
 			r.Group(func(r chi.Router) {
 				r.Use(authMiddleware.RequireSuperAdmin())

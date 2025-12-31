@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"questionarie-service/middleware"
 	"questionarie-service/services"
 	"questionarie-service/utils"
 	"strconv"
@@ -145,4 +146,37 @@ func (h *UserMetadataHandler) GetUsersByCompany(w http.ResponseWriter, r *http.R
 	}
 
 	utils.RespondWithSuccess(w, http.StatusOK, users, "")
+}
+
+// GetMyMetadata handles GET /api/v1/users/me/metadata
+func (h *UserMetadataHandler) GetMyMetadata(w http.ResponseWriter, r *http.Request) {
+	claims, _ := middleware.GetUserFromContext(r.Context())
+
+	metadata, err := h.service.GetUserMetadata(r.Context(), claims.Sub)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	// Build enhanced response with role from JWT
+	response := map[string]interface{}{
+		"user_id":    metadata.ID,
+		"company_id": metadata.CompanyID.Hex(),
+		"created_at": metadata.CreatedAt,
+	}
+
+	// Add role from JWT (first role)
+	if len(claims.Roles) > 0 {
+		response["role"] = claims.Roles[0]
+	}
+
+	// Add optional fields
+	if metadata.SupervisorID != "" {
+		response["supervisor_id"] = metadata.SupervisorID
+	}
+	if metadata.Department != "" {
+		response["department"] = metadata.Department
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, response, "")
 }

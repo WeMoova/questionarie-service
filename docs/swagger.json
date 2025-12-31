@@ -699,6 +699,54 @@
         }
       }
     },
+    "/api/v1/users/me/metadata": {
+      "get": {
+        "security": [{"Bearer": []}],
+        "description": "Get my user metadata (authenticated user)",
+        "tags": ["User Metadata"],
+        "summary": "Get My Metadata",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "user_id": {
+                  "type": "string",
+                  "example": "6f0f68fd-5eff-4ce4-b421-ef827cae9783"
+                },
+                "company_id": {
+                  "type": "string",
+                  "example": "69556bd21d3cda9d6e1e13d8"
+                },
+                "role": {
+                  "type": "string",
+                  "example": "company_admin"
+                },
+                "supervisor_id": {
+                  "type": "string",
+                  "example": "22222222-2222-2222-2222-222222222222"
+                },
+                "department": {
+                  "type": "string",
+                  "example": "Tecnología"
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid token"
+          },
+          "404": {
+            "description": "Not Found - User not linked to any company"
+          }
+        }
+      }
+    },
     "/api/v1/users/metadata": {
       "post": {
         "security": [{"Bearer": []}],
