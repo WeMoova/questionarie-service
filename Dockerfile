@@ -27,6 +27,9 @@ WORKDIR /root/
 # Copy binary from builder
 COPY --from=builder /app/main .
 
+# Copy docs folder for Swagger UI
+COPY --from=builder /app/docs ./docs
+
 # Create non-root user
 RUN addgroup -g 1000 appuser && \
     adduser -D -u 1000 -G appuser appuser && \
