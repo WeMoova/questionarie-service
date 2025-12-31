@@ -93,15 +93,15 @@ func main() {
 			w.Write([]byte("Ready"))
 		})
 
-		// Swagger UI (no auth required)
-		r.Get("/swagger/*", httpSwagger.Handler(
-			httpSwagger.URL("/questionarie-service/swagger/doc.json"),
-		))
-
 		// Serve swagger.json file
 		r.Get("/swagger/doc.json", func(w http.ResponseWriter, r *http.Request) {
 			http.ServeFile(w, r, "./docs/swagger.json")
 		})
+
+		// Swagger UI (no auth required) - must be after doc.json route
+		r.Get("/swagger*", httpSwagger.Handler(
+			httpSwagger.URL("/questionarie-service/swagger/doc.json"),
+		))
 
 		// Protected routes with JWT authentication
 		r.Group(func(r chi.Router) {
