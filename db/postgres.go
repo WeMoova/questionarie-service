@@ -32,7 +32,7 @@ func NewPostgresDB() (*PostgresDB, error) {
 	}
 
 	connStr := fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s search_path=%s sslmode=require",
+		"host=%s port=%s user=%s password=%s dbname=%s search_path=%s sslmode=disable",
 		dbHost, dbPort, dbUser, dbPassword, dbName, dbSchema,
 	)
 
