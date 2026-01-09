@@ -303,7 +303,7 @@
       },
       "post": {
         "security": [{"Bearer": []}],
-        "description": "Create a new company (Super Admin only)",
+        "description": "Create a new company (Super Admin only). The is_active field defaults to true if not provided.",
         "tags": ["Companies"],
         "summary": "Create Company",
         "parameters": [
@@ -319,6 +319,11 @@
                 "name": {
                   "type": "string",
                   "example": "Wemoova Technologies S.A."
+                },
+                "is_active": {
+                  "type": "boolean",
+                  "example": true,
+                  "description": "Company active status (default: true)"
                 }
               }
             }
@@ -326,7 +331,32 @@
         ],
         "responses": {
           "201": {
-            "description": "Created"
+            "description": "Created",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "example": "69556bd21d3cda9d6e1e13d8"
+                },
+                "name": {
+                  "type": "string",
+                  "example": "Wemoova Technologies S.A."
+                },
+                "is_active": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "updated_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
           },
           "400": {
             "description": "Bad Request"
