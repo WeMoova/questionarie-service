@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"questionarie-service/middleware"
 	"questionarie-service/models"
 	"questionarie-service/repository"
 
@@ -183,4 +184,59 @@ func (s *UserMetadataService) GetUsersByDepartment(ctx context.Context, companyI
 	}
 
 	return s.userMetadataRepo.GetByCompanyAndDepartment(ctx, companyID, department)
+}
+
+// ListUsersWithFilters retrieves users with filters based on role
+func (s *UserMetadataService) ListUsersWithFilters(ctx context.Context, companyID *primitive.ObjectID, supervisorID *string, department *string, page, pageSize int64) ([]*models.UserMetadata, int64, error) {
+	// Set default pagination
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 10
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+
+	// Get user claims from context
+	claims, err := middleware.GetUserFromContext(ctx)
+	if err != nil || claims == nil {
+		return nil, 0, fmt.Errorf("unauthorized: user claims not found")
+	}
+
+	// Apply role-based filtering
+	var finalCompanyID *primitive.ObjectID
+	var finalSupervisorID *string
+	var finalDepartment *string
+
+	if middleware.IsSuperAdmin(ctx) {
+		// Super Admin: can filter by any company_id or see all
+		finalCompanyID = companyID
+		finalSupervisorID = supervisorID
+		finalDepartment = department
+	} else if middleware.IsCompanyAdmin(ctx) {
+		// Company Admin: only returns users from their company (ignores the parameter company_id)
+		userMeta, err := s.userMetadataRepo.GetByID(ctx, claims.Sub)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to get user metadata: %w", err)
+		}
+		finalCompanyID = &userMeta.CompanyID
+		finalSupervisorID = supervisorID
+		finalDepartment = department
+	} else if middleware.IsSupervisor(ctx) {
+		// Supervisor: only returns users from their team
+		userMeta, err := s.userMetadataRepo.GetByID(ctx, claims.Sub)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to get user metadata: %w", err)
+		}
+		finalCompanyID = &userMeta.CompanyID
+		finalSupervisorID = &claims.Sub
+		finalDepartment = department
+	} else {
+		// Employee: no access to list users
+		return nil, 0, fmt.Errorf("forbidden: insufficient permissions to list users")
+	}
+
+	return s.userMetadataRepo.ListWithFilters(ctx, finalCompanyID, finalSupervisorID, finalDepartment, page, pageSize)
 }

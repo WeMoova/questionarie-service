@@ -258,3 +258,47 @@ func (r *UserMetadataRepository) GetUsersByCompanyWithPagination(ctx context.Con
 
 	return users, nil
 }
+
+// ListWithFilters retrieves users metadata with optional filters and pagination
+func (r *UserMetadataRepository) ListWithFilters(ctx context.Context, companyID *primitive.ObjectID, supervisorID *string, department *string, page, pageSize int64) ([]*models.UserMetadata, int64, error) {
+	// Build filter
+	filter := bson.M{}
+
+	if companyID != nil {
+		filter["company_id"] = *companyID
+	}
+
+	if supervisorID != nil && *supervisorID != "" {
+		filter["supervisor_id"] = *supervisorID
+	}
+
+	if department != nil && *department != "" {
+		filter["department"] = *department
+	}
+
+	// Count total
+	total, err := r.collection.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to count users: %w", err)
+	}
+
+	// Apply pagination
+	skip := (page - 1) * pageSize
+	opts := options.Find().
+		SetSkip(skip).
+		SetLimit(pageSize).
+		SetSort(bson.D{{Key: "created_at", Value: -1}})
+
+	cursor, err := r.collection.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to get users: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	var users []*models.UserMetadata
+	if err = cursor.All(ctx, &users); err != nil {
+		return nil, 0, fmt.Errorf("failed to decode users: %w", err)
+	}
+
+	return users, total, nil
+}

@@ -748,6 +748,118 @@
       }
     },
     "/api/v1/users/metadata": {
+      "get": {
+        "security": [{"Bearer": []}],
+        "description": "List users with metadata (Super Admin, Company Admin, Supervisor). Super Admin can filter by any company_id or see all. Company Admin only sees users from their company (ignores company_id parameter). Supervisor only sees users from their team.",
+        "tags": ["User Metadata"],
+        "summary": "List Users with Metadata",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Filter by Company ID (ObjectId)",
+            "name": "company_id",
+            "in": "query",
+            "required": false
+          },
+          {
+            "type": "string",
+            "description": "Filter by Supervisor ID (FusionAuth user ID)",
+            "name": "supervisor_id",
+            "in": "query",
+            "required": false
+          },
+          {
+            "type": "string",
+            "description": "Filter by Department",
+            "name": "department",
+            "in": "query",
+            "required": false
+          },
+          {
+            "type": "integer",
+            "description": "Page number (default: 1)",
+            "name": "page",
+            "in": "query",
+            "required": false
+          },
+          {
+            "type": "integer",
+            "description": "Page size (default: 10, max: 100)",
+            "name": "page_size",
+            "in": "query",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "users": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "example": "6f0f68fd-5eff-4ce4-b421-ef827cae9783"
+                      },
+                      "company_id": {
+                        "type": "string",
+                        "example": "69556bd21d3cda9d6e1e13d8"
+                      },
+                      "supervisor_id": {
+                        "type": "string",
+                        "example": "22222222-2222-2222-2222-222222222222"
+                      },
+                      "department": {
+                        "type": "string",
+                        "example": "Tecnología"
+                      },
+                      "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "updated_at": {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    }
+                  }
+                },
+                "pagination": {
+                  "type": "object",
+                  "properties": {
+                    "page": {
+                      "type": "integer",
+                      "example": 1
+                    },
+                    "page_size": {
+                      "type": "integer",
+                      "example": 10
+                    },
+                    "total": {
+                      "type": "integer",
+                      "example": 45
+                    },
+                    "total_pages": {
+                      "type": "integer",
+                      "example": 5
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid token"
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions"
+          }
+        }
+      },
       "post": {
         "security": [{"Bearer": []}],
         "description": "Create user metadata (link user to company) - Super Admin only",

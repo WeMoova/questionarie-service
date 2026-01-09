@@ -139,6 +139,13 @@ func main() {
 			// === User Metadata - Get My Metadata (All authenticated users) ===
 			r.Get("/api/v1/users/me/metadata", userMetadataHandler.GetMyMetadata)
 
+			// === User Metadata - List Users (Super Admin, Company Admin, Supervisor) ===
+			r.Group(func(r chi.Router) {
+				r.Use(authMiddleware.RequireSupervisor())
+
+				r.Get("/api/v1/users/metadata", userMetadataHandler.ListUsers)
+			})
+
 			// === User Metadata (Super Admin only) ===
 			r.Group(func(r chi.Router) {
 				r.Use(authMiddleware.RequireSuperAdmin())

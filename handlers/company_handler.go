@@ -26,7 +26,8 @@ func NewCompanyHandler(service *services.CompanyService) *CompanyHandler {
 // CreateCompany handles POST /api/v1/companies
 func (h *CompanyHandler) CreateCompany(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name string `json:"name"`
+		Name     string `json:"name"`
+		IsActive *bool  `json:"is_active"`
 	}
 
 	if err := utils.ParseRequestBody(r, &req); err != nil {
@@ -34,7 +35,13 @@ func (h *CompanyHandler) CreateCompany(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	company, err := h.service.CreateCompany(r.Context(), req.Name)
+	// Default is_active to true if not provided
+	isActive := true
+	if req.IsActive != nil {
+		isActive = *req.IsActive
+	}
+
+	company, err := h.service.CreateCompany(r.Context(), req.Name, isActive)
 	if err != nil {
 		utils.HandleRepositoryError(w, err)
 		return
@@ -85,7 +92,8 @@ func (h *CompanyHandler) UpdateCompany(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Name string `json:"name"`
+		Name     string `json:"name"`
+		IsActive *bool  `json:"is_active"`
 	}
 
 	if err := utils.ParseRequestBody(r, &req); err != nil {
@@ -93,7 +101,7 @@ func (h *CompanyHandler) UpdateCompany(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.UpdateCompany(r.Context(), id, req.Name); err != nil {
+	if err := h.service.UpdateCompany(r.Context(), id, req.Name, req.IsActive); err != nil {
 		utils.HandleRepositoryError(w, err)
 		return
 	}

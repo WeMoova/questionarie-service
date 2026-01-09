@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // UserMetadataHandler handles user metadata-related HTTP requests
@@ -176,6 +177,59 @@ func (h *UserMetadataHandler) GetMyMetadata(w http.ResponseWriter, r *http.Reque
 	}
 	if metadata.Department != "" {
 		response["department"] = metadata.Department
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, response, "")
+}
+
+// ListUsers handles GET /api/v1/users/metadata
+func (h *UserMetadataHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
+	// Parse query parameters
+	companyIDStr := r.URL.Query().Get("company_id")
+	supervisorID := r.URL.Query().Get("supervisor_id")
+	department := r.URL.Query().Get("department")
+	page, _ := strconv.ParseInt(r.URL.Query().Get("page"), 10, 64)
+	pageSize, _ := strconv.ParseInt(r.URL.Query().Get("page_size"), 10, 64)
+
+	// Parse company_id if provided
+	var companyID *primitive.ObjectID
+	if companyIDStr != "" {
+		cid, err := utils.ValidateObjectID(companyIDStr)
+		if err != nil {
+			utils.BadRequest(w, "invalid company_id: "+err.Error())
+			return
+		}
+		companyID = &cid
+	}
+
+	// Parse supervisor_id if provided
+	var supervisorIDPtr *string
+	if supervisorID != "" {
+		supervisorIDPtr = &supervisorID
+	}
+
+	// Parse department if provided
+	var departmentPtr *string
+	if department != "" {
+		departmentPtr = &department
+	}
+
+	// Call service with role-based filtering
+	users, total, err := h.service.ListUsersWithFilters(r.Context(), companyID, supervisorIDPtr, departmentPtr, page, pageSize)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	// Build response
+	response := map[string]interface{}{
+		"users": users,
+		"pagination": map[string]interface{}{
+			"page":       page,
+			"page_size":  pageSize,
+			"total":      total,
+			"total_pages": (total + pageSize - 1) / pageSize,
+		},
 	}
 
 	utils.RespondWithSuccess(w, http.StatusOK, response, "")

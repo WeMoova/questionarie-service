@@ -10,6 +10,7 @@ import (
 type Company struct {
 	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
 	Name      string             `bson:"name" json:"name" validate:"required,min=3,max=200"`
+	IsActive  bool               `bson:"is_active" json:"is_active"`
 	CreatedAt time.Time          `bson:"created_at" json:"created_at"`
 	UpdatedAt time.Time          `bson:"updated_at" json:"updated_at"`
 }
@@ -20,6 +21,7 @@ func NewCompany(name string) *Company {
 	return &Company{
 		ID:        primitive.NewObjectID(),
 		Name:      name,
+		IsActive:  true, // Default: true
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
