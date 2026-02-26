@@ -108,10 +108,15 @@ func (h *UserMetadataHandler) UpdateUserMetadata(w http.ResponseWriter, r *http.
 		return
 	}
 
-	companyID, err := utils.ValidateObjectID(req.CompanyID)
-	if err != nil {
-		utils.BadRequest(w, "invalid company_id: "+err.Error())
-		return
+	// company_id is optional on partial updates (e.g. updating only document/phone fields)
+	var companyID primitive.ObjectID
+	if req.CompanyID != "" {
+		var err error
+		companyID, err = utils.ValidateObjectID(req.CompanyID)
+		if err != nil {
+			utils.BadRequest(w, "invalid company_id: "+err.Error())
+			return
+		}
 	}
 
 	if err := h.service.UpdateUserMetadata(r.Context(), userID, companyID, req.SupervisorID, req.Department, req.DocumentType, req.DocumentNumber, req.Phone, req.Position, req.EmployeeCode); err != nil {
@@ -265,6 +270,14 @@ func (h *UserMetadataHandler) ListUsers(w http.ResponseWriter, r *http.Request) 
 		departmentPtr = &department
 	}
 
+	// Normalize pagination before service call and response building
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 25
+	}
+
 	// Call service with role-based filtering
 	users, total, err := h.service.ListUsersWithFilters(r.Context(), companyID, supervisorIDPtr, departmentPtr, page, pageSize)
 	if err != nil {
@@ -272,15 +285,10 @@ func (h *UserMetadataHandler) ListUsers(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Build response
+	// Build response using "data" key for consistency with other list endpoints
 	response := map[string]interface{}{
-		"users": users,
-		"pagination": map[string]interface{}{
-			"page":       page,
-			"page_size":  pageSize,
-			"total":      total,
-			"total_pages": (total + pageSize - 1) / pageSize,
-		},
+		"data":  users,
+		"total": total,
 	}
 
 	utils.RespondWithSuccess(w, http.StatusOK, response, "")
