@@ -13,6 +13,8 @@ type Company struct {
 	IsActive  bool               `bson:"is_active" json:"is_active"`
 	CreatedAt time.Time          `bson:"created_at" json:"created_at"`
 	UpdatedAt time.Time          `bson:"updated_at" json:"updated_at"`
+	// Transient field — not persisted, populated by service layer
+	QuestionnaireCount int `bson:"-" json:"questionnaire_count"`
 }
 
 // NewCompany creates a new Company with timestamps

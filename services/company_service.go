@@ -84,7 +84,7 @@ func (s *CompanyService) GetCompanyByID(ctx context.Context, id primitive.Object
 	return s.companyRepo.GetByID(ctx, id)
 }
 
-// GetAllCompanies retrieves all companies with pagination
+// GetAllCompanies retrieves all companies with pagination, enriched with active questionnaire count.
 func (s *CompanyService) GetAllCompanies(ctx context.Context, page, pageSize int64) ([]*models.Company, error) {
 	if page <= 0 {
 		page = 1
@@ -96,7 +96,19 @@ func (s *CompanyService) GetAllCompanies(ctx context.Context, page, pageSize int
 		pageSize = 100
 	}
 
-	return s.companyRepo.GetAll(ctx, page, pageSize)
+	companies, err := s.companyRepo.GetAll(ctx, page, pageSize)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, company := range companies {
+		count, err := s.companyQuestionnaireRepo.CountByCompanyID(ctx, company.ID)
+		if err == nil {
+			company.QuestionnaireCount = int(count)
+		}
+	}
+
+	return companies, nil
 }
 
 // UpdateCompany updates a company
@@ -179,9 +191,23 @@ func (s *CompanyService) AssignQuestionnaireToCompany(
 	return cq, nil
 }
 
-// GetCompanyQuestionnaires retrieves all questionnaires assigned to a company
+// GetCompanyQuestionnaires retrieves all questionnaires assigned to a company,
+// enriched with the questionnaire title and description.
 func (s *CompanyService) GetCompanyQuestionnaires(ctx context.Context, companyID primitive.ObjectID, activeOnly bool) ([]*models.CompanyQuestionnaire, error) {
-	return s.companyQuestionnaireRepo.GetByCompanyID(ctx, companyID, activeOnly)
+	cqs, err := s.companyQuestionnaireRepo.GetByCompanyID(ctx, companyID, activeOnly)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, cq := range cqs {
+		q, err := s.questionnaireRepo.GetByID(ctx, cq.QuestionnaireID)
+		if err == nil {
+			cq.QuestionnaireTitle = q.Title
+			cq.QuestionnaireDescription = q.Description
+		}
+	}
+
+	return cqs, nil
 }
 
 // GetActiveCompanyQuestionnaires retrieves active questionnaires for a company in current period

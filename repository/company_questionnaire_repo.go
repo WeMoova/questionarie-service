@@ -212,6 +212,18 @@ func (r *CompanyQuestionnaireRepository) Delete(ctx context.Context, id primitiv
 	return nil
 }
 
+// CountByCompanyID counts active questionnaires assigned to a company
+func (r *CompanyQuestionnaireRepository) CountByCompanyID(ctx context.Context, companyID primitive.ObjectID) (int64, error) {
+	count, err := r.collection.CountDocuments(ctx, bson.M{
+		"company_id": companyID,
+		"is_active":  true,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to count company questionnaires: %w", err)
+	}
+	return count, nil
+}
+
 // CheckDuplicate checks if a questionnaire is already assigned to a company for the same period
 func (r *CompanyQuestionnaireRepository) CheckDuplicate(ctx context.Context, companyID, questionnaireID primitive.ObjectID, periodStart, periodEnd time.Time) (bool, error) {
 	filter := bson.M{

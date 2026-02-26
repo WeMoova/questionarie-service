@@ -109,6 +109,9 @@ type CompanyQuestionnaire struct {
 	StatusHistory   []StatusChange             `bson:"status_history" json:"status_history"`
 	RemindersSent   int                        `bson:"reminders_sent" json:"reminders_sent"`
 	LastReminderAt  *time.Time                 `bson:"last_reminder_at,omitempty" json:"last_reminder_at,omitempty"`
+	// Transient fields — not persisted, populated by service layer
+	QuestionnaireTitle       string `bson:"-" json:"questionnaire_title,omitempty"`
+	QuestionnaireDescription string `bson:"-" json:"questionnaire_description,omitempty"`
 }
 
 // NewCompanyQuestionnaire creates a new company questionnaire assignment
