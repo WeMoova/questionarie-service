@@ -16,7 +16,7 @@ const (
 
 // Question represents an embedded question within a questionnaire
 type Question struct {
-	QuestionID   string                 `bson:"question_id" json:"question_id"`
+	QuestionID   string                 `bson:"question_id" json:"id"`
 	QuestionText string                 `bson:"question_text" json:"question_text" validate:"required,min=5"`
 	QuestionType QuestionType           `bson:"question_type" json:"question_type" validate:"required,oneof=multiple_choice likert_scale free_text yes_no"`
 	Options      map[string]interface{} `bson:"options,omitempty" json:"options,omitempty"`
