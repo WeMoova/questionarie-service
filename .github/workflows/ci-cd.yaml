@@ -1,6 +1,9 @@
 name: CI/CD Pipeline
 
 on:
+  push:
+    branches:
+      - main
   release:
     types: [published]
   workflow_dispatch:
@@ -29,6 +32,8 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            echo "environment=qa" >> $GITHUB_OUTPUT
           elif [[ "${{ github.ref }}" == refs/tags/v*-qa ]]; then
             echo "environment=qa" >> $GITHUB_OUTPUT
           elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
@@ -43,7 +48,8 @@ jobs:
           if [ "${{ github.event_name }}" = "release" ]; then
             echo "tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
           else
-            echo "tag=$(date +%Y%m%d-%H%M%S)-${{ github.sha }}" >> $GITHUB_OUTPUT
+            SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+            echo "tag=$(date +%Y%m%d-%H%M%S)-${SHORT_SHA}" >> $GITHUB_OUTPUT
           fi
 
   build-and-push:
@@ -112,6 +118,13 @@ jobs:
           repository: WeMoova/argo-apps
           token: ${{ secrets.ARGOCD_SYNC_TOKEN }}
           path: argo-apps
+
+      - name: Install yq
+        run: |
+          YQ_VERSION="v4.44.3"
+          wget -qO /usr/local/bin/yq \
+            "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"
+          chmod +x /usr/local/bin/yq
 
       - name: Update image tag in manifests
         run: |
