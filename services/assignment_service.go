@@ -136,10 +136,6 @@ func (s *AssignmentService) AssignToUsers(
 		assignments = append(assignments, assignment)
 	}
 
-	if len(assignments) == 0 {
-		return nil, fmt.Errorf("no new assignments created (all users already assigned)")
-	}
-
 	return assignments, nil
 }
 
@@ -154,7 +150,22 @@ func (s *AssignmentService) GetUserAssignments(ctx context.Context, userID strin
 }
 
 // GetCompanyQuestionnaireAssignments retrieves all assignments for a company questionnaire
-func (s *AssignmentService) GetCompanyQuestionnaireAssignments(ctx context.Context, cqID primitive.ObjectID) ([]*models.UserQuestionnaireAssignment, error) {
+func (s *AssignmentService) GetCompanyQuestionnaireAssignments(ctx context.Context, cqID primitive.ObjectID, userID string, isSuperAdmin bool) ([]*models.UserQuestionnaireAssignment, error) {
+	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, cqID)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isSuperAdmin {
+		userMeta, err := s.userMetadataRepo.GetByID(ctx, userID)
+		if err != nil {
+			return nil, fmt.Errorf("user metadata not found: %w", err)
+		}
+		if cq.CompanyID != userMeta.CompanyID {
+			return nil, fmt.Errorf("unauthorized: company questionnaire not in your company")
+		}
+	}
+
 	return s.assignmentRepo.GetByCompanyQuestionnaireID(ctx, cqID)
 }
 

@@ -70,7 +70,10 @@ func (h *AssignmentHandler) GetAssignmentsByCompanyQuestionnaire(w http.Response
 		return
 	}
 
-	assignments, err := h.service.GetCompanyQuestionnaireAssignments(r.Context(), cqID)
+	claims, _ := middleware.GetUserFromContext(r.Context())
+	isSuperAdmin := middleware.IsSuperAdmin(r.Context())
+
+	assignments, err := h.service.GetCompanyQuestionnaireAssignments(r.Context(), cqID, claims.Sub, isSuperAdmin)
 	if err != nil {
 		utils.HandleRepositoryError(w, err)
 		return
