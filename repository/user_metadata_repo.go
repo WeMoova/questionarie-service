@@ -104,10 +104,15 @@ func (r *UserMetadataRepository) Update(ctx context.Context, userID string, meta
 	metadata.UpdatedAt = time.Now()
 	update := bson.M{
 		"$set": bson.M{
-			"company_id":    metadata.CompanyID,
-			"supervisor_id": metadata.SupervisorID,
-			"department":    metadata.Department,
-			"updated_at":    metadata.UpdatedAt,
+			"company_id":      metadata.CompanyID,
+			"supervisor_id":   metadata.SupervisorID,
+			"department":      metadata.Department,
+			"document_type":   metadata.DocumentType,
+			"document_number": metadata.DocumentNumber,
+			"phone":           metadata.Phone,
+			"position":        metadata.Position,
+			"employee_code":   metadata.EmployeeCode,
+			"updated_at":      metadata.UpdatedAt,
 		},
 	}
 
@@ -206,6 +211,24 @@ func (r *UserMetadataRepository) GetByIDs(ctx context.Context, userIDs []string)
 	}
 
 	return users, nil
+}
+
+// GetByDocumentNumbers returns users in a company matching any of the given document numbers
+func (r *UserMetadataRepository) GetByDocumentNumbers(ctx context.Context, companyID primitive.ObjectID, numbers []string) ([]*models.UserMetadata, error) {
+	filter := bson.M{
+		"company_id":      companyID,
+		"document_number": bson.M{"$in": numbers},
+	}
+	cursor, err := r.collection.Find(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get users by document numbers: %w", err)
+	}
+	defer cursor.Close(ctx)
+	var results []*models.UserMetadata
+	if err := cursor.All(ctx, &results); err != nil {
+		return nil, fmt.Errorf("failed to decode users: %w", err)
+	}
+	return results, nil
 }
 
 // CountByCompany returns the total number of users in a company

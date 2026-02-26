@@ -159,6 +159,7 @@ func main() {
 				r.Use(authMiddleware.RequireSupervisor())
 
 				r.Get("/api/v1/users/metadata", userMetadataHandler.ListUsers)
+				r.Post("/api/v1/users/metadata/resolve-documents", userMetadataHandler.ResolveByDocuments)
 			})
 
 			// === User Metadata (Super Admin only) ===

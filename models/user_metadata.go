@@ -11,8 +11,13 @@ type UserMetadata struct {
 	ID           string             `bson:"_id" json:"id"`                       // FusionAuth user ID (sub)
 	CompanyID    primitive.ObjectID `bson:"company_id" json:"company_id" validate:"required"` // Reference to companies
 	SupervisorID string             `bson:"supervisor_id,omitempty" json:"supervisor_id,omitempty"` // FusionAuth ID of supervisor
-	Department   string             `bson:"department,omitempty" json:"department,omitempty"`
-	CreatedAt    time.Time          `bson:"created_at" json:"created_at"`
+	Department     string             `bson:"department,omitempty"      json:"department,omitempty"`
+	DocumentType   string             `bson:"document_type,omitempty"   json:"document_type,omitempty"`
+	DocumentNumber string             `bson:"document_number,omitempty" json:"document_number,omitempty"`
+	Phone          string             `bson:"phone,omitempty"           json:"phone,omitempty"`
+	Position       string             `bson:"position,omitempty"        json:"position,omitempty"`
+	EmployeeCode   string             `bson:"employee_code,omitempty"   json:"employee_code,omitempty"`
+	CreatedAt      time.Time          `bson:"created_at" json:"created_at"`
 	UpdatedAt    time.Time          `bson:"updated_at" json:"updated_at"`
 }
 

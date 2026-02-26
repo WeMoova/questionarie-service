@@ -26,10 +26,15 @@ func NewUserMetadataHandler(service *services.UserMetadataService) *UserMetadata
 // CreateUserMetadata handles POST /api/v1/users/metadata
 func (h *UserMetadataHandler) CreateUserMetadata(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		UserID       string `json:"user_id"`
-		CompanyID    string `json:"company_id"`
-		SupervisorID string `json:"supervisor_id"`
-		Department   string `json:"department"`
+		UserID         string `json:"user_id"`
+		CompanyID      string `json:"company_id"`
+		SupervisorID   string `json:"supervisor_id"`
+		Department     string `json:"department"`
+		DocumentType   string `json:"document_type"`
+		DocumentNumber string `json:"document_number"`
+		Phone          string `json:"phone"`
+		Position       string `json:"position"`
+		EmployeeCode   string `json:"employee_code"`
 	}
 
 	if err := utils.ParseRequestBody(r, &req); err != nil {
@@ -53,7 +58,7 @@ func (h *UserMetadataHandler) CreateUserMetadata(w http.ResponseWriter, r *http.
 		return
 	}
 
-	metadata, err := h.service.CreateUserMetadata(r.Context(), req.UserID, companyID, req.SupervisorID, req.Department)
+	metadata, err := h.service.CreateUserMetadata(r.Context(), req.UserID, companyID, req.SupervisorID, req.Department, req.DocumentType, req.DocumentNumber, req.Phone, req.Position, req.EmployeeCode)
 	if err != nil {
 		utils.HandleRepositoryError(w, err)
 		return
@@ -88,9 +93,14 @@ func (h *UserMetadataHandler) UpdateUserMetadata(w http.ResponseWriter, r *http.
 	}
 
 	var req struct {
-		CompanyID    string `json:"company_id"`
-		SupervisorID string `json:"supervisor_id"`
-		Department   string `json:"department"`
+		CompanyID      string `json:"company_id"`
+		SupervisorID   string `json:"supervisor_id"`
+		Department     string `json:"department"`
+		DocumentType   string `json:"document_type"`
+		DocumentNumber string `json:"document_number"`
+		Phone          string `json:"phone"`
+		Position       string `json:"position"`
+		EmployeeCode   string `json:"employee_code"`
 	}
 
 	if err := utils.ParseRequestBody(r, &req); err != nil {
@@ -104,7 +114,7 @@ func (h *UserMetadataHandler) UpdateUserMetadata(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if err := h.service.UpdateUserMetadata(r.Context(), userID, companyID, req.SupervisorID, req.Department); err != nil {
+	if err := h.service.UpdateUserMetadata(r.Context(), userID, companyID, req.SupervisorID, req.Department, req.DocumentType, req.DocumentNumber, req.Phone, req.Position, req.EmployeeCode); err != nil {
 		utils.HandleRepositoryError(w, err)
 		return
 	}
@@ -180,6 +190,47 @@ func (h *UserMetadataHandler) GetMyMetadata(w http.ResponseWriter, r *http.Reque
 	}
 
 	utils.RespondWithSuccess(w, http.StatusOK, response, "")
+}
+
+// ResolveByDocuments resolves document numbers to FusionAuth user IDs
+func (h *UserMetadataHandler) ResolveByDocuments(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims, _ := middleware.GetUserFromContext(ctx)
+	isSuperAdmin := middleware.IsSuperAdmin(ctx)
+
+	var req struct {
+		DocumentNumbers []string `json:"document_numbers"`
+		CompanyID       string   `json:"company_id"`
+	}
+	if err := utils.ParseRequestBody(r, &req); err != nil {
+		utils.BadRequest(w, "invalid request body")
+		return
+	}
+	if len(req.DocumentNumbers) == 0 {
+		utils.BadRequest(w, "document_numbers cannot be empty")
+		return
+	}
+
+	var companyID primitive.ObjectID
+	if req.CompanyID != "" {
+		var err error
+		companyID, err = primitive.ObjectIDFromHex(req.CompanyID)
+		if err != nil {
+			utils.BadRequest(w, "invalid company_id")
+			return
+		}
+	}
+
+	resolved, notFound, err := h.service.ResolveByDocuments(ctx, claims.Sub, isSuperAdmin, companyID, req.DocumentNumbers)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, map[string]interface{}{
+		"resolved":  resolved,
+		"not_found": notFound,
+	}, "")
 }
 
 // ListUsers handles GET /api/v1/users/metadata

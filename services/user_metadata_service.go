@@ -28,7 +28,7 @@ func NewUserMetadataService(
 }
 
 // CreateUserMetadata creates user metadata (Super Admin only)
-func (s *UserMetadataService) CreateUserMetadata(ctx context.Context, userID string, companyID primitive.ObjectID, supervisorID, department string) (*models.UserMetadata, error) {
+func (s *UserMetadataService) CreateUserMetadata(ctx context.Context, userID string, companyID primitive.ObjectID, supervisorID, department, documentType, documentNumber, phone, position, employeeCode string) (*models.UserMetadata, error) {
 	// Validate user ID
 	if userID == "" {
 		return nil, fmt.Errorf("user ID is required")
@@ -67,6 +67,11 @@ func (s *UserMetadataService) CreateUserMetadata(ctx context.Context, userID str
 	if department != "" {
 		metadata.SetDepartment(department)
 	}
+	metadata.DocumentType = documentType
+	metadata.DocumentNumber = documentNumber
+	metadata.Phone = phone
+	metadata.Position = position
+	metadata.EmployeeCode = employeeCode
 
 	if err := s.userMetadataRepo.Create(ctx, metadata); err != nil {
 		return nil, fmt.Errorf("failed to create user metadata: %w", err)
@@ -101,7 +106,7 @@ func (s *UserMetadataService) GetUsersBySupervisor(ctx context.Context, supervis
 }
 
 // UpdateUserMetadata updates user metadata
-func (s *UserMetadataService) UpdateUserMetadata(ctx context.Context, userID string, companyID primitive.ObjectID, supervisorID, department string) error {
+func (s *UserMetadataService) UpdateUserMetadata(ctx context.Context, userID string, companyID primitive.ObjectID, supervisorID, department, documentType, documentNumber, phone, position, employeeCode string) error {
 	// Get existing metadata
 	metadata, err := s.userMetadataRepo.GetByID(ctx, userID)
 	if err != nil {
@@ -133,7 +138,64 @@ func (s *UserMetadataService) UpdateUserMetadata(ctx context.Context, userID str
 		metadata.SetDepartment(department)
 	}
 
+	// Update new employee fields if provided
+	if documentType != "" {
+		metadata.DocumentType = documentType
+	}
+	if documentNumber != "" {
+		metadata.DocumentNumber = documentNumber
+	}
+	if phone != "" {
+		metadata.Phone = phone
+	}
+	if position != "" {
+		metadata.Position = position
+	}
+	if employeeCode != "" {
+		metadata.EmployeeCode = employeeCode
+	}
+
 	return s.userMetadataRepo.Update(ctx, userID, metadata)
+}
+
+// ResolvedDocument maps a document number to a FusionAuth user ID
+type ResolvedDocument struct {
+	DocumentNumber string `json:"document_number"`
+	UserID         string `json:"user_id"`
+}
+
+// ResolveByDocuments looks up users by their document numbers within a company
+func (s *UserMetadataService) ResolveByDocuments(ctx context.Context, requesterID string, isSuperAdmin bool, companyID primitive.ObjectID, documentNumbers []string) (resolved []ResolvedDocument, notFound []string, err error) {
+	// If not super admin, restrict to requester's own company
+	if !isSuperAdmin {
+		requesterMeta, err := s.userMetadataRepo.GetByID(ctx, requesterID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("requester metadata not found: %w", err)
+		}
+		companyID = requesterMeta.CompanyID
+	}
+
+	found, err := s.userMetadataRepo.GetByDocumentNumbers(ctx, companyID, documentNumbers)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Build a set of found document numbers
+	foundSet := make(map[string]string, len(found))
+	for _, u := range found {
+		foundSet[u.DocumentNumber] = u.ID
+	}
+
+	resolved = make([]ResolvedDocument, 0, len(found))
+	notFound = make([]string, 0)
+	for _, num := range documentNumbers {
+		if userID, ok := foundSet[num]; ok {
+			resolved = append(resolved, ResolvedDocument{DocumentNumber: num, UserID: userID})
+		} else {
+			notFound = append(notFound, num)
+		}
+	}
+	return resolved, notFound, nil
 }
 
 // DeleteUserMetadata deletes user metadata (Super Admin only)
