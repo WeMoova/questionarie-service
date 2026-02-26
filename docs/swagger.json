@@ -1,13 +1,13 @@
 {
   "swagger": "2.0",
   "info": {
-    "description": "Sistema completo de gestión de cuestionarios inspirado en NOM-035 (Norma Mexicana de Riesgos Psicosociales) con soporte para múltiples tipos de preguntas, asignación jerárquica por roles, y reportes agregados por empresa.",
-    "title": "Questionnaire Service API - NOM-035",
+    "description": "Sistema completo de gestión de cuestionarios NOM-035 (y otros dominios) para empresas. Soporta múltiples tipos de preguntas, ciclo de vida de cuestionarios por empresa con máquina de estados, asignación jerárquica por roles, reportes agregados y exportación de datos.",
+    "title": "Questionnaire Service API - NOM-035 / Wemoova",
     "contact": {
       "name": "Wemoova Technologies",
       "email": "support@wemoova.com"
     },
-    "version": "1.0"
+    "version": "1.1"
   },
   "host": "qa.services.wemoova.com",
   "basePath": "/questionarie-service",
@@ -27,7 +27,9 @@
     "/health": {
       "get": {
         "description": "Health check endpoint",
-        "tags": ["Health"],
+        "tags": [
+          "Health"
+        ],
         "summary": "Health Check",
         "responses": {
           "200": {
@@ -39,44 +41,53 @@
     "/ready": {
       "get": {
         "description": "Readiness check endpoint (includes MongoDB health)",
-        "tags": ["Health"],
+        "tags": [
+          "Health"
+        ],
         "summary": "Readiness Check",
         "responses": {
           "200": {
             "description": "Ready"
           },
           "503": {
-            "description": "Service Unavailable - Database unhealthy"
+            "description": "Service Unavailable"
           }
         }
       }
     },
     "/api/v1/questionnaires": {
       "get": {
-        "security": [{"Bearer": []}],
-        "description": "Get all questionnaires (Super Admin only)",
-        "tags": ["Questionnaires"],
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "List all questionnaires (Super Admin only)",
+        "tags": [
+          "Questionnaires"
+        ],
         "summary": "List Questionnaires",
         "parameters": [
           {
             "type": "integer",
-            "description": "Page number",
             "name": "page",
             "in": "query"
           },
           {
             "type": "integer",
-            "description": "Page size",
             "name": "page_size",
             "in": "query"
+          },
+          {
+            "type": "boolean",
+            "name": "active",
+            "in": "query",
+            "description": "Filter by active only"
           }
         ],
         "responses": {
           "200": {
             "description": "Success"
-          },
-          "401": {
-            "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden"
@@ -84,27 +95,47 @@
         }
       },
       "post": {
-        "security": [{"Bearer": []}],
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
         "description": "Create a new questionnaire (Super Admin only)",
-        "tags": ["Questionnaires"],
+        "tags": [
+          "Questionnaires"
+        ],
         "summary": "Create Questionnaire",
         "parameters": [
           {
-            "description": "Questionnaire data",
             "name": "body",
             "in": "body",
             "required": true,
             "schema": {
               "type": "object",
-              "required": ["title"],
+              "required": [
+                "title"
+              ],
               "properties": {
                 "title": {
                   "type": "string",
-                  "example": "Cuestionario NOM-035 Guía III"
+                  "example": "NOM-035 Guía III 2025"
                 },
                 "description": {
+                  "type": "string"
+                },
+                "tags": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "example": [
+                    "nom-035",
+                    "riesgo-psicosocial"
+                  ]
+                },
+                "category_id": {
                   "type": "string",
-                  "example": "Identificación y análisis de factores de riesgo psicosocial"
+                  "description": "ID de categoría (opcional)"
                 }
               }
             }
@@ -116,26 +147,25 @@
           },
           "400": {
             "description": "Bad Request"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
         }
       }
     },
     "/api/v1/questionnaires/{id}": {
       "get": {
-        "security": [{"Bearer": []}],
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
         "description": "Get questionnaire by ID (Super Admin only)",
-        "tags": ["Questionnaires"],
+        "tags": [
+          "Questionnaires"
+        ],
         "summary": "Get Questionnaire",
         "parameters": [
           {
             "type": "string",
-            "description": "Questionnaire ID",
             "name": "id",
             "in": "path",
             "required": true
@@ -151,20 +181,24 @@
         }
       },
       "put": {
-        "security": [{"Bearer": []}],
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
         "description": "Update questionnaire (Super Admin only)",
-        "tags": ["Questionnaires"],
+        "tags": [
+          "Questionnaires"
+        ],
         "summary": "Update Questionnaire",
         "parameters": [
           {
             "type": "string",
-            "description": "Questionnaire ID",
             "name": "id",
             "in": "path",
             "required": true
           },
           {
-            "description": "Questionnaire update data",
             "name": "body",
             "in": "body",
             "required": true,
@@ -176,6 +210,18 @@
                 },
                 "description": {
                   "type": "string"
+                },
+                "is_active": {
+                  "type": "boolean"
+                },
+                "tags": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "category_id": {
+                  "type": "string"
                 }
               }
             }
@@ -183,25 +229,24 @@
         ],
         "responses": {
           "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "404": {
-            "description": "Not Found"
+            "description": "Updated"
           }
         }
       },
       "delete": {
-        "security": [{"Bearer": []}],
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
         "description": "Deactivate questionnaire (Super Admin only)",
-        "tags": ["Questionnaires"],
+        "tags": [
+          "Questionnaires"
+        ],
         "summary": "Deactivate Questionnaire",
         "parameters": [
           {
             "type": "string",
-            "description": "Questionnaire ID",
             "name": "id",
             "in": "path",
             "required": true
@@ -209,49 +254,120 @@
         ],
         "responses": {
           "200": {
-            "description": "Success"
-          },
-          "404": {
-            "description": "Not Found"
+            "description": "Deactivated"
+          }
+        }
+      }
+    },
+    "/api/v1/questionnaires/{id}/stats": {
+      "get": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Get stats for a specific questionnaire: total questions, required questions, tags, category (Super Admin only)",
+        "tags": [
+          "Questionnaires"
+        ],
+        "summary": "Get Questionnaire Stats",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "questionnaire_id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "is_active": {
+                  "type": "boolean"
+                },
+                "total_questions": {
+                  "type": "integer"
+                },
+                "required_questions": {
+                  "type": "integer"
+                },
+                "tags": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "category_id": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
     },
     "/api/v1/questionnaires/{id}/questions": {
       "post": {
-        "security": [{"Bearer": []}],
-        "description": "Add question to questionnaire (Super Admin only)",
-        "tags": ["Questions"],
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Add a question to questionnaire (Super Admin only)",
+        "tags": [
+          "Questions"
+        ],
         "summary": "Add Question",
         "parameters": [
           {
             "type": "string",
-            "description": "Questionnaire ID",
             "name": "id",
             "in": "path",
             "required": true
           },
           {
-            "description": "Question data",
             "name": "body",
             "in": "body",
             "required": true,
             "schema": {
               "type": "object",
-              "required": ["question_text", "question_type"],
+              "required": [
+                "question_text",
+                "question_type"
+              ],
               "properties": {
                 "question_text": {
                   "type": "string",
-                  "example": "Mi trabajo me permite desarrollar nuevas habilidades"
+                  "example": "¿Mi trabajo me permite desarrollar nuevas habilidades?"
                 },
                 "question_type": {
                   "type": "string",
-                  "enum": ["multiple_choice", "likert_scale", "free_text", "yes_no"],
-                  "example": "likert_scale"
+                  "enum": [
+                    "multiple_choice",
+                    "likert_scale",
+                    "free_text",
+                    "yes_no"
+                  ]
                 },
                 "options": {
                   "type": "object",
-                  "example": {"min": 1, "max": 5, "labels": {"1": "Nunca", "5": "Siempre"}}
+                  "example": {
+                    "min": 1,
+                    "max": 5,
+                    "labels": {
+                      "1": "Nunca",
+                      "5": "Siempre"
+                    }
+                  }
                 },
                 "is_required": {
                   "type": "boolean",
@@ -268,31 +384,100 @@
         "responses": {
           "201": {
             "description": "Created"
-          },
-          "400": {
-            "description": "Bad Request"
           }
         }
       }
     },
-    "/api/v1/companies": {
-      "get": {
-        "security": [{"Bearer": []}],
-        "description": "Get all companies (Super Admin only)",
-        "tags": ["Companies"],
-        "summary": "List Companies",
+    "/api/v1/questionnaires/{id}/questions/{question_id}": {
+      "put": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Update a question (Super Admin only)",
+        "tags": [
+          "Questions"
+        ],
+        "summary": "Update Question",
         "parameters": [
           {
-            "type": "integer",
-            "description": "Page number",
-            "name": "page",
-            "in": "query"
+            "type": "string",
+            "name": "id",
+            "in": "path",
+            "required": true
           },
           {
-            "type": "integer",
-            "description": "Page size",
-            "name": "page_size",
-            "in": "query"
+            "type": "string",
+            "name": "question_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated"
+          }
+        }
+      },
+      "delete": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Remove a question (Super Admin only)",
+        "tags": [
+          "Questions"
+        ],
+        "summary": "Remove Question",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "name": "question_id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Removed"
+          }
+        }
+      }
+    },
+    "/api/v1/questionnaire-categories": {
+      "get": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "List all questionnaire categories (Super Admin only)",
+        "tags": [
+          "Categories"
+        ],
+        "summary": "List Categories",
+        "parameters": [
+          {
+            "type": "boolean",
+            "name": "active",
+            "in": "query",
+            "description": "Filter active only"
           }
         ],
         "responses": {
@@ -302,28 +487,34 @@
         }
       },
       "post": {
-        "security": [{"Bearer": []}],
-        "description": "Create a new company (Super Admin only). The is_active field defaults to true if not provided.",
-        "tags": ["Companies"],
-        "summary": "Create Company",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Create a questionnaire category (Super Admin only). Useful for grouping: NOM-035, Bienestar, Clima Laboral, Onboarding.",
+        "tags": [
+          "Categories"
+        ],
+        "summary": "Create Category",
         "parameters": [
           {
-            "description": "Company data",
             "name": "body",
             "in": "body",
             "required": true,
             "schema": {
               "type": "object",
-              "required": ["name"],
+              "required": [
+                "name"
+              ],
               "properties": {
                 "name": {
                   "type": "string",
-                  "example": "Wemoova Technologies S.A."
+                  "example": "NOM-035"
                 },
-                "is_active": {
-                  "type": "boolean",
-                  "example": true,
-                  "description": "Company active status (default: true)"
+                "description": {
+                  "type": "string",
+                  "example": "Norma Mexicana de Riesgos Psicosociales"
                 }
               }
             }
@@ -331,21 +522,91 @@
         ],
         "responses": {
           "201": {
-            "description": "Created",
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/questionnaire-categories/{id}": {
+      "put": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Update a category (Super Admin only)",
+        "tags": [
+          "Categories"
+        ],
+        "summary": "Update Category",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "is_active": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated"
+          }
+        }
+      },
+      "get": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Get a questionnaire category by ID (Super Admin only)",
+        "tags": [
+          "Categories"
+        ],
+        "summary": "Get Category by ID",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
             "schema": {
               "type": "object",
               "properties": {
                 "id": {
-                  "type": "string",
-                  "example": "69556bd21d3cda9d6e1e13d8"
+                  "type": "string"
                 },
                 "name": {
-                  "type": "string",
-                  "example": "Wemoova Technologies S.A."
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
                 },
                 "is_active": {
-                  "type": "boolean",
-                  "example": true
+                  "type": "boolean"
                 },
                 "created_at": {
                   "type": "string",
@@ -358,25 +619,228 @@
               }
             }
           },
-          "400": {
-            "description": "Bad Request"
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/questionnaire-categories/{id}/questionnaires": {
+      "get": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "List questionnaires belonging to a category (Super Admin only)",
+        "tags": [
+          "Categories"
+        ],
+        "summary": "Get Questionnaires by Category",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/v1/companies": {
+      "get": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "List all companies (Super Admin only)",
+        "tags": [
+          "Companies"
+        ],
+        "summary": "List Companies",
+        "parameters": [
+          {
+            "type": "integer",
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "name": "page_size",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      },
+      "post": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Create a new company (Super Admin only)",
+        "tags": [
+          "Companies"
+        ],
+        "summary": "Create Company",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "example": "Salud Mental MX S.A."
+                },
+                "is_active": {
+                  "type": "boolean",
+                  "example": true
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/companies/{id}": {
+      "get": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Get company by ID (Super Admin only)",
+        "tags": [
+          "Companies"
+        ],
+        "summary": "Get Company",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      },
+      "put": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Update company (Super Admin only)",
+        "tags": [
+          "Companies"
+        ],
+        "summary": "Update Company",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "is_active": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated"
+          }
+        }
+      },
+      "delete": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Deactivate company (soft delete - Super Admin only)",
+        "tags": [
+          "Companies"
+        ],
+        "summary": "Deactivate Company",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deactivated"
+          },
+          "404": {
+            "description": "Not Found"
           }
         }
       }
     },
     "/api/v1/companies/{company_id}/questionnaires": {
       "get": {
-        "security": [{"Bearer": []}],
-        "description": "Get questionnaires assigned to company (Company Admin or Super Admin)",
-        "tags": ["Company Questionnaires"],
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "List questionnaires assigned to a company (Company Admin+)",
+        "tags": [
+          "Company Questionnaires"
+        ],
         "summary": "Get Company Questionnaires",
         "parameters": [
           {
             "type": "string",
-            "description": "Company ID",
             "name": "company_id",
             "in": "path",
             "required": true
+          },
+          {
+            "type": "boolean",
+            "name": "active",
+            "in": "query"
           }
         ],
         "responses": {
@@ -386,39 +850,47 @@
         }
       },
       "post": {
-        "security": [{"Bearer": []}],
-        "description": "Assign questionnaire to company (Super Admin only)",
-        "tags": ["Company Questionnaires"],
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Assign questionnaire to company with period (Super Admin only). Creates a CompanyQuestionnaire in 'active' status.",
+        "tags": [
+          "Company Questionnaires"
+        ],
         "summary": "Assign Questionnaire to Company",
         "parameters": [
           {
             "type": "string",
-            "description": "Company ID",
             "name": "company_id",
             "in": "path",
             "required": true
           },
           {
-            "description": "Assignment data",
             "name": "body",
             "in": "body",
             "required": true,
             "schema": {
               "type": "object",
-              "required": ["questionnaire_id", "period_start", "period_end"],
+              "required": [
+                "questionnaire_id",
+                "period_start",
+                "period_end"
+              ],
               "properties": {
                 "questionnaire_id": {
                   "type": "string"
                 },
                 "period_start": {
                   "type": "string",
-                  "format": "date-time",
-                  "example": "2025-01-15T00:00:00Z"
+                  "format": "date",
+                  "example": "2025-01-01"
                 },
                 "period_end": {
                   "type": "string",
-                  "format": "date-time",
-                  "example": "2025-02-15T23:59:59Z"
+                  "format": "date",
+                  "example": "2025-03-31"
                 }
               }
             }
@@ -429,21 +901,453 @@
             "description": "Created"
           },
           "400": {
-            "description": "Bad Request"
+            "description": "Bad Request - period overlap or questionnaire inactive"
+          }
+        }
+      }
+    },
+    "/api/v1/companies/{company_id}/dashboard": {
+      "get": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Company dashboard: all questionnaires with completion stats (Company Admin+). Shows all CQs with % completion, totals por estado.",
+        "tags": [
+          "Companies"
+        ],
+        "summary": "Company Dashboard",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "company_id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "company_questionnaire_id": {
+                    "type": "string"
+                  },
+                  "questionnaire_title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "paused",
+                      "closed",
+                      "expired"
+                    ]
+                  },
+                  "period_start": {
+                    "type": "string"
+                  },
+                  "period_end": {
+                    "type": "string"
+                  },
+                  "total_assigned": {
+                    "type": "integer"
+                  },
+                  "completed": {
+                    "type": "integer"
+                  },
+                  "in_progress": {
+                    "type": "integer"
+                  },
+                  "pending": {
+                    "type": "integer"
+                  },
+                  "completion_rate": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/company-questionnaires/{id}": {
+      "get": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Get a CompanyQuestionnaire by ID with status and history (Company Admin+)",
+        "tags": [
+          "Company Questionnaires"
+        ],
+        "summary": "Get Company Questionnaire",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      },
+      "put": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Update period or active status of a company questionnaire (Company Admin+)",
+        "tags": [
+          "Company Questionnaires"
+        ],
+        "summary": "Update Company Questionnaire Period",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "period_start": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "period_end": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "is_active": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated"
+          }
+        }
+      }
+    },
+    "/api/v1/company-questionnaires/{id}/activate": {
+      "post": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Activate a CompanyQuestionnaire (draft→active or paused→active). Company Admin+",
+        "tags": [
+          "Company Questionnaires"
+        ],
+        "summary": "Activate Company Questionnaire",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Activated"
+          },
+          "400": {
+            "description": "Invalid transition"
+          }
+        }
+      }
+    },
+    "/api/v1/company-questionnaires/{id}/pause": {
+      "post": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Pause a CompanyQuestionnaire (active→paused). Employees cannot save responses while paused. Company Admin+",
+        "tags": [
+          "Company Questionnaires"
+        ],
+        "summary": "Pause Company Questionnaire",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paused"
+          }
+        }
+      }
+    },
+    "/api/v1/company-questionnaires/{id}/close": {
+      "post": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Close a CompanyQuestionnaire permanently (terminal state). Company Admin+",
+        "tags": [
+          "Company Questionnaires"
+        ],
+        "summary": "Close Company Questionnaire",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Closed"
+          }
+        }
+      }
+    },
+    "/api/v1/company-questionnaires/{cq_id}/progress": {
+      "get": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Detailed progress: % completitud + list of users with their status and individual progress (Supervisor+)",
+        "tags": [
+          "Company Questionnaires"
+        ],
+        "summary": "Get Assignment Progress",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "cq_id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "company_questionnaire_id": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "total_assigned": {
+                  "type": "integer"
+                },
+                "completed": {
+                  "type": "integer"
+                },
+                "in_progress": {
+                  "type": "integer"
+                },
+                "pending": {
+                  "type": "integer"
+                },
+                "cancelled": {
+                  "type": "integer"
+                },
+                "completion_rate": {
+                  "type": "number",
+                  "example": 64.0
+                },
+                "users": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "user_id": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string"
+                      },
+                      "progress_pct": {
+                        "type": "number"
+                      },
+                      "assigned_at": {
+                        "type": "string"
+                      },
+                      "completed_at": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/company-questionnaires/{cq_id}/pending-users": {
+      "get": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "List assignments with status 'pending' (not started) for a company questionnaire (Supervisor+)",
+        "tags": [
+          "Company Questionnaires"
+        ],
+        "summary": "Get Pending Users",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "cq_id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/v1/company-questionnaires/{cq_id}/in-progress-users": {
+      "get": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "List assignments with status 'in_progress' for a company questionnaire (Supervisor+)",
+        "tags": [
+          "Company Questionnaires"
+        ],
+        "summary": "Get In-Progress Users",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "cq_id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/v1/company-questionnaires/{cq_id}/completed-users": {
+      "get": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "List assignments with status 'completed' for a company questionnaire (Supervisor+)",
+        "tags": [
+          "Company Questionnaires"
+        ],
+        "summary": "Get Completed Users",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "cq_id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
           }
         }
       }
     },
     "/api/v1/company-questionnaires/{cq_id}/assignments": {
       "get": {
-        "security": [{"Bearer": []}],
-        "description": "Get assignments for a company questionnaire (Company Admin, Supervisor)",
-        "tags": ["Assignments"],
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Get all assignments for a company questionnaire (Supervisor+)",
+        "tags": [
+          "Assignments"
+        ],
         "summary": "Get Assignments",
         "parameters": [
           {
             "type": "string",
-            "description": "Company Questionnaire ID",
             "name": "cq_id",
             "in": "path",
             "required": true
@@ -456,33 +1360,42 @@
         }
       },
       "post": {
-        "security": [{"Bearer": []}],
-        "description": "Assign questionnaire to users (Company Admin, Supervisor)",
-        "tags": ["Assignments"],
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Assign questionnaire to specific users by ID list (Company Admin, Supervisor)",
+        "tags": [
+          "Assignments"
+        ],
         "summary": "Assign to Users",
         "parameters": [
           {
             "type": "string",
-            "description": "Company Questionnaire ID",
             "name": "cq_id",
             "in": "path",
             "required": true
           },
           {
-            "description": "User IDs to assign",
             "name": "body",
             "in": "body",
             "required": true,
             "schema": {
               "type": "object",
-              "required": ["user_ids"],
+              "required": [
+                "user_ids"
+              ],
               "properties": {
                 "user_ids": {
                   "type": "array",
                   "items": {
                     "type": "string"
                   },
-                  "example": ["11111111-1111-1111-1111-111111111111"]
+                  "example": [
+                    "uuid-1",
+                    "uuid-2"
+                  ]
                 }
               }
             }
@@ -490,29 +1403,275 @@
         ],
         "responses": {
           "201": {
-            "description": "Created"
-          },
-          "400": {
-            "description": "Bad Request"
+            "description": "Assignments created"
           },
           "403": {
-            "description": "Forbidden - Cannot assign to users outside your scope"
+            "description": "Forbidden"
+          }
+        }
+      },
+      "delete": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Cancel all pending/in-progress assignments for a company questionnaire (Company Admin+)",
+        "tags": [
+          "Assignments"
+        ],
+        "summary": "Cancel All Pending Assignments",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "cq_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "cancelled_count": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/company-questionnaires/{cq_id}/assign-all": {
+      "post": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Returns the list of all user IDs in the company for bulk assignment. Then use POST /assignments with those IDs. (Company Admin+)",
+        "tags": [
+          "Assignments"
+        ],
+        "summary": "Get All Company Users for Assignment",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "cq_id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User IDs ready for assignment",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "user_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "total_users": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/company-questionnaires/{cq_id}/assign-department": {
+      "post": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Returns user IDs for a specific department for bulk assignment (Company Admin+)",
+        "tags": [
+          "Assignments"
+        ],
+        "summary": "Get Department Users for Assignment",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "cq_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "required": [
+                "department"
+              ],
+              "properties": {
+                "department": {
+                  "type": "string",
+                  "example": "Desarrollo"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User IDs for department"
+          }
+        }
+      }
+    },
+    "/api/v1/company-questionnaires/{cq_id}/remind": {
+      "post": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Register a reminder event for pending/in-progress users. Records the event and returns which users would be notified. Integration with email/push is done by another service. (Supervisor+)",
+        "tags": [
+          "Reminders"
+        ],
+        "summary": "Register Reminder",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "cq_id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "target": {
+                  "type": "string",
+                  "enum": [
+                    "pending",
+                    "in_progress",
+                    "all"
+                  ],
+                  "default": "pending"
+                },
+                "message": {
+                  "type": "string",
+                  "example": "Por favor completa tu cuestionario antes del viernes."
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reminder registered",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "company_questionnaire_id": {
+                  "type": "string"
+                },
+                "target": {
+                  "type": "string"
+                },
+                "user_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "count": {
+                  "type": "integer"
+                },
+                "reminders_sent": {
+                  "type": "integer"
+                },
+                "last_reminder_at": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/my-company/questionnaires": {
+      "get": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Get active questionnaires for the authenticated user's company (Supervisor+)",
+        "tags": [
+          "Assignments"
+        ],
+        "summary": "Get My Company Questionnaires",
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/v1/my-team/assignments": {
+      "get": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Get assignments for users supervised by the authenticated user (Supervisor+)",
+        "tags": [
+          "Assignments"
+        ],
+        "summary": "Get My Team Assignments",
+        "responses": {
+          "200": {
+            "description": "Success"
           }
         }
       }
     },
     "/api/v1/my-assignments": {
       "get": {
-        "security": [{"Bearer": []}],
-        "description": "Get my assigned questionnaires (Employee)",
-        "tags": ["Responses"],
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Get my assigned questionnaires (Employee - all authenticated users)",
+        "tags": [
+          "Responses"
+        ],
         "summary": "Get My Assignments",
         "parameters": [
           {
             "type": "string",
-            "description": "Filter by status: pending, in_progress, completed",
             "name": "status",
-            "in": "query"
+            "in": "query",
+            "description": "Filter: pending, in_progress, completed, cancelled"
           }
         ],
         "responses": {
@@ -524,14 +1683,19 @@
     },
     "/api/v1/assignments/{id}": {
       "get": {
-        "security": [{"Bearer": []}],
-        "description": "Get assignment details with questions (Employee)",
-        "tags": ["Responses"],
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Get assignment details with embedded responses (Employee - own assignments only)",
+        "tags": [
+          "Responses"
+        ],
         "summary": "Get Assignment Details",
         "parameters": [
           {
             "type": "string",
-            "description": "Assignment ID",
             "name": "id",
             "in": "path",
             "required": true
@@ -542,42 +1706,46 @@
             "description": "Success"
           },
           "403": {
-            "description": "Forbidden - Not your assignment"
-          },
-          "404": {
-            "description": "Not Found"
+            "description": "Forbidden"
           }
         }
       }
     },
     "/api/v1/assignments/{id}/responses": {
       "post": {
-        "security": [{"Bearer": []}],
-        "description": "Save a single response (Employee)",
-        "tags": ["Responses"],
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Save a single response. Auto-starts the assignment on first response (Employee)",
+        "tags": [
+          "Responses"
+        ],
         "summary": "Save Response",
         "parameters": [
           {
             "type": "string",
-            "description": "Assignment ID",
             "name": "id",
             "in": "path",
             "required": true
           },
           {
-            "description": "Response data",
             "name": "body",
             "in": "body",
             "required": true,
             "schema": {
               "type": "object",
-              "required": ["question_id", "response_value"],
+              "required": [
+                "question_id",
+                "response_value"
+              ],
               "properties": {
                 "question_id": {
                   "type": "string"
                 },
                 "response_value": {
-                  "description": "Can be number, string, boolean, or array depending on question type",
+                  "description": "number | string | boolean depending on question type",
                   "example": 4
                 }
               }
@@ -586,34 +1754,40 @@
         ],
         "responses": {
           "200": {
-            "description": "Success"
+            "description": "Saved"
           },
           "400": {
-            "description": "Bad Request"
+            "description": "Period expired or assignment completed"
           }
         }
       },
       "put": {
-        "security": [{"Bearer": []}],
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
         "description": "Update multiple responses at once (Employee)",
-        "tags": ["Responses"],
+        "tags": [
+          "Responses"
+        ],
         "summary": "Update Multiple Responses",
         "parameters": [
           {
             "type": "string",
-            "description": "Assignment ID",
             "name": "id",
             "in": "path",
             "required": true
           },
           {
-            "description": "Multiple responses",
             "name": "body",
             "in": "body",
             "required": true,
             "schema": {
               "type": "object",
-              "required": ["responses"],
+              "required": [
+                "responses"
+              ],
               "properties": {
                 "responses": {
                   "type": "array",
@@ -633,21 +1807,26 @@
         ],
         "responses": {
           "200": {
-            "description": "Success"
+            "description": "Updated"
           }
         }
       }
     },
     "/api/v1/assignments/{id}/submit": {
       "post": {
-        "security": [{"Bearer": []}],
-        "description": "Submit completed questionnaire (Employee)",
-        "tags": ["Responses"],
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Submit completed questionnaire. Validates all required questions are answered (Employee)",
+        "tags": [
+          "Responses"
+        ],
         "summary": "Submit Assignment",
         "parameters": [
           {
             "type": "string",
-            "description": "Assignment ID",
             "name": "id",
             "in": "path",
             "required": true
@@ -655,24 +1834,71 @@
         ],
         "responses": {
           "200": {
-            "description": "Success"
+            "description": "Submitted"
           },
           "400": {
-            "description": "Bad Request - Missing required answers"
+            "description": "Not all required questions answered"
+          }
+        }
+      }
+    },
+    "/api/v1/assignments/{id}/cancel": {
+      "post": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Cancel a specific assignment. Cannot cancel completed assignments. (Supervisor+)",
+        "tags": [
+          "Assignments"
+        ],
+        "summary": "Cancel Assignment",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cancelled"
+          },
+          "400": {
+            "description": "Already completed"
           }
         }
       }
     },
     "/api/v1/reports/company-questionnaire/{cq_id}/completion": {
       "get": {
-        "security": [{"Bearer": []}],
-        "description": "Get completion metrics for a company questionnaire (Company Admin, Supervisor)",
-        "tags": ["Reports"],
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Completion metrics: totals por estado, tiempo promedio, breakdown por departamento (Supervisor+)",
+        "tags": [
+          "Reports"
+        ],
         "summary": "Get Completion Metrics",
         "parameters": [
           {
             "type": "string",
-            "description": "Company Questionnaire ID",
             "name": "cq_id",
             "in": "path",
             "required": true
@@ -685,16 +1911,115 @@
         }
       }
     },
+    "/api/v1/reports/company-questionnaire/{cq_id}/answers": {
+      "get": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Distribution of answers per question (Company Admin+). For likert_scale includes numeric average. Only considers completed assignments.",
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Get Answer Distribution",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "cq_id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "question_id": {
+                    "type": "string"
+                  },
+                  "question_text": {
+                    "type": "string"
+                  },
+                  "question_type": {
+                    "type": "string"
+                  },
+                  "total_answers": {
+                    "type": "integer"
+                  },
+                  "distribution": {
+                    "type": "object",
+                    "example": {
+                      "1": 2,
+                      "2": 5,
+                      "3": 15,
+                      "4": 18,
+                      "5": 5
+                    }
+                  },
+                  "average": {
+                    "type": "number",
+                    "example": 3.4
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reports/company-questionnaire/{cq_id}/export": {
+      "get": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Export anonymized CSV of completed responses. Rows are identified by row number (not user_id). Contains: row_id, department, status, timestamps, and one column per question. (Company Admin+)",
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Export CSV",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "cq_id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "produces": [
+          "text/csv"
+        ],
+        "responses": {
+          "200": {
+            "description": "CSV file",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
     "/api/v1/reports/company/{company_id}/overview": {
       "get": {
-        "security": [{"Bearer": []}],
-        "description": "Get overview of all questionnaires for a company (Company Admin)",
-        "tags": ["Reports"],
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Company overview: total employees, questionnaires, assignments breakdown (Company Admin+)",
+        "tags": [
+          "Reports"
+        ],
         "summary": "Get Company Overview",
         "parameters": [
           {
             "type": "string",
-            "description": "Company ID",
             "name": "company_id",
             "in": "path",
             "required": true
@@ -709,14 +2034,19 @@
     },
     "/api/v1/reports/company/{company_id}/employees-progress": {
       "get": {
-        "security": [{"Bearer": []}],
-        "description": "Get employee progress for all questionnaires (Company Admin, Supervisor)",
-        "tags": ["Reports"],
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Progress per employee: completed/in_progress/pending counts and completion rate (Company Admin+)",
+        "tags": [
+          "Reports"
+        ],
         "summary": "Get Employee Progress",
         "parameters": [
           {
             "type": "string",
-            "description": "Company ID",
             "name": "company_id",
             "in": "path",
             "required": true
@@ -729,95 +2059,80 @@
         }
       }
     },
-    "/api/v1/users/me/metadata": {
+    "/api/v1/reports/company/{company_id}/trends": {
       "get": {
-        "security": [{"Bearer": []}],
-        "description": "Get my user metadata (authenticated user)",
-        "tags": ["User Metadata"],
-        "summary": "Get My Metadata",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Compare completion rate and avg time across all periods/questionnaires for a company (Company Admin+)",
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Get Trends",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "company_id",
+            "in": "path",
+            "required": true
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success",
             "schema": {
-              "type": "object",
-              "properties": {
-                "user_id": {
-                  "type": "string",
-                  "example": "6f0f68fd-5eff-4ce4-b421-ef827cae9783"
-                },
-                "company_id": {
-                  "type": "string",
-                  "example": "69556bd21d3cda9d6e1e13d8"
-                },
-                "role": {
-                  "type": "string",
-                  "example": "company_admin"
-                },
-                "supervisor_id": {
-                  "type": "string",
-                  "example": "22222222-2222-2222-2222-222222222222"
-                },
-                "department": {
-                  "type": "string",
-                  "example": "Tecnología"
-                },
-                "created_at": {
-                  "type": "string",
-                  "format": "date-time"
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "company_questionnaire_id": {
+                    "type": "string"
+                  },
+                  "period_start": {
+                    "type": "string"
+                  },
+                  "period_end": {
+                    "type": "string"
+                  },
+                  "total_assigned": {
+                    "type": "integer"
+                  },
+                  "completed": {
+                    "type": "integer"
+                  },
+                  "completion_rate": {
+                    "type": "number"
+                  },
+                  "avg_time_minutes": {
+                    "type": "number"
+                  }
                 }
               }
             }
-          },
-          "401": {
-            "description": "Unauthorized - Invalid token"
-          },
-          "404": {
-            "description": "Not Found - User not linked to any company"
           }
         }
       }
     },
-    "/api/v1/users/metadata": {
+    "/api/v1/reports/assignments/{id}": {
       "get": {
-        "security": [{"Bearer": []}],
-        "description": "List users with metadata (Super Admin, Company Admin, Supervisor). Super Admin can filter by any company_id or see all. Company Admin only sees users from their company (ignores company_id parameter). Supervisor only sees users from their team.",
-        "tags": ["User Metadata"],
-        "summary": "List Users with Metadata",
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Full individual report for a single assignment: all responses enriched with question text. For supervisors/admins within the same company. (Supervisor+)",
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Get Individual Assignment Report",
         "parameters": [
           {
             "type": "string",
-            "description": "Filter by Company ID (ObjectId)",
-            "name": "company_id",
-            "in": "query",
-            "required": false
-          },
-          {
-            "type": "string",
-            "description": "Filter by Supervisor ID (FusionAuth user ID)",
-            "name": "supervisor_id",
-            "in": "query",
-            "required": false
-          },
-          {
-            "type": "string",
-            "description": "Filter by Department",
-            "name": "department",
-            "in": "query",
-            "required": false
-          },
-          {
-            "type": "integer",
-            "description": "Page number (default: 1)",
-            "name": "page",
-            "in": "query",
-            "required": false
-          },
-          {
-            "type": "integer",
-            "description": "Page size (default: 10, max: 100)",
-            "name": "page_size",
-            "in": "query",
-            "required": false
+            "name": "id",
+            "in": "path",
+            "required": true
           }
         ],
         "responses": {
@@ -826,104 +2141,151 @@
             "schema": {
               "type": "object",
               "properties": {
-                "users": {
+                "assignment_id": {
+                  "type": "string"
+                },
+                "user_id": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "progress_pct": {
+                  "type": "number"
+                },
+                "time_to_complete_minutes": {
+                  "type": "number"
+                },
+                "responses": {
                   "type": "array",
                   "items": {
                     "type": "object",
                     "properties": {
-                      "id": {
-                        "type": "string",
-                        "example": "6f0f68fd-5eff-4ce4-b421-ef827cae9783"
+                      "question_id": {
+                        "type": "string"
                       },
-                      "company_id": {
-                        "type": "string",
-                        "example": "69556bd21d3cda9d6e1e13d8"
+                      "question_text": {
+                        "type": "string"
                       },
-                      "supervisor_id": {
-                        "type": "string",
-                        "example": "22222222-2222-2222-2222-222222222222"
+                      "question_type": {
+                        "type": "string"
                       },
-                      "department": {
-                        "type": "string",
-                        "example": "Tecnología"
-                      },
-                      "created_at": {
-                        "type": "string",
-                        "format": "date-time"
-                      },
-                      "updated_at": {
-                        "type": "string",
-                        "format": "date-time"
+                      "response_value": {},
+                      "answered_at": {
+                        "type": "string"
                       }
-                    }
-                  }
-                },
-                "pagination": {
-                  "type": "object",
-                  "properties": {
-                    "page": {
-                      "type": "integer",
-                      "example": 1
-                    },
-                    "page_size": {
-                      "type": "integer",
-                      "example": 10
-                    },
-                    "total": {
-                      "type": "integer",
-                      "example": 45
-                    },
-                    "total_pages": {
-                      "type": "integer",
-                      "example": 5
                     }
                   }
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/users/me/metadata": {
+      "get": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Get my user metadata (authenticated user - all roles)",
+        "tags": [
+          "User Metadata"
+        ],
+        "summary": "Get My Metadata",
+        "responses": {
+          "200": {
+            "description": "Success"
           },
-          "401": {
-            "description": "Unauthorized - Invalid token"
+          "404": {
+            "description": "User not linked to any company"
+          }
+        }
+      }
+    },
+    "/api/v1/users/metadata": {
+      "get": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "List users with metadata (Supervisor+). Super Admin sees all, Company Admin sees own company, Supervisor sees team.",
+        "tags": [
+          "User Metadata"
+        ],
+        "summary": "List Users",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "company_id",
+            "in": "query"
           },
-          "403": {
-            "description": "Forbidden - Insufficient permissions"
+          {
+            "type": "string",
+            "name": "supervisor_id",
+            "in": "query"
+          },
+          {
+            "type": "string",
+            "name": "department",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "name": "page_size",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
           }
         }
       },
       "post": {
-        "security": [{"Bearer": []}],
-        "description": "Create user metadata (link user to company) - Super Admin only",
-        "tags": ["User Metadata"],
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Create user metadata - link user to company (Super Admin only)",
+        "tags": [
+          "User Metadata"
+        ],
         "summary": "Create User Metadata",
         "parameters": [
           {
-            "description": "User metadata",
             "name": "body",
             "in": "body",
             "required": true,
             "schema": {
               "type": "object",
-              "required": ["user_id", "company_id"],
+              "required": [
+                "user_id",
+                "company_id"
+              ],
               "properties": {
                 "user_id": {
                   "type": "string",
-                  "description": "FusionAuth user ID",
-                  "example": "11111111-1111-1111-1111-111111111111"
+                  "description": "FusionAuth user ID"
                 },
                 "company_id": {
                   "type": "string",
-                  "description": "MongoDB company ObjectID",
-                  "example": "677e5b3c8f1c2d3e4f5a6b7d"
+                  "description": "MongoDB company ObjectID"
                 },
                 "supervisor_id": {
-                  "type": "string",
-                  "description": "FusionAuth supervisor user ID (optional)",
-                  "example": "22222222-2222-2222-2222-222222222222"
+                  "type": "string"
                 },
                 "department": {
-                  "type": "string",
-                  "description": "Department name (optional)",
-                  "example": "Tecnología"
+                  "type": "string"
                 }
               }
             }
@@ -932,9 +2294,185 @@
         "responses": {
           "201": {
             "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/v1/users/metadata/{user_id}": {
+      "get": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Get metadata for a specific user (Super Admin only)",
+        "tags": [
+          "User Metadata"
+        ],
+        "summary": "Get User Metadata",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "user_id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      },
+      "put": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Update user metadata (Super Admin only)",
+        "tags": [
+          "User Metadata"
+        ],
+        "summary": "Update User Metadata",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "user_id",
+            "in": "path",
+            "required": true
           },
-          "400": {
-            "description": "Bad Request"
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "supervisor_id": {
+                  "type": "string"
+                },
+                "department": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated"
+          }
+        }
+      },
+      "delete": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Delete user metadata (Super Admin only)",
+        "tags": [
+          "User Metadata"
+        ],
+        "summary": "Delete User Metadata",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "user_id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted"
+          }
+        }
+      }
+    },
+    "/api/v1/companies/{company_id}/users": {
+      "get": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Get all users in a company (Super Admin only)",
+        "tags": [
+          "User Metadata"
+        ],
+        "summary": "Get Company Users",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "company_id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    },
+    "/api/v1/questionnaires/{id}/companies": {
+      "get": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Get all companies that have this questionnaire assigned (Super Admin only)",
+        "tags": [
+          "Questionnaires"
+        ],
+        "summary": "Get Companies Using Questionnaire",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Questionnaire ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "company_id": {
+                    "type": "string"
+                  },
+                  "company_name": {
+                    "type": "string"
+                  },
+                  "company_questionnaire_id": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string",
+                    "example": "active"
+                  },
+                  "period_start": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "period_end": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
           }
         }
       }
@@ -947,11 +2485,15 @@
     },
     {
       "name": "Questionnaires",
-      "description": "Questionnaire management (Super Admin only)"
+      "description": "Questionnaire templates (Super Admin only)"
     },
     {
       "name": "Questions",
       "description": "Question management within questionnaires (Super Admin only)"
+    },
+    {
+      "name": "Categories",
+      "description": "Questionnaire categories: NOM-035, Bienestar, Clima Laboral, etc. (Super Admin only)"
     },
     {
       "name": "Companies",
@@ -959,15 +2501,15 @@
     },
     {
       "name": "Company Questionnaires",
-      "description": "Assign questionnaires to companies"
-    },
-    {
-      "name": "User Metadata",
-      "description": "Link users to companies and supervisors (Super Admin only)"
+      "description": "Assign questionnaires to companies with period and lifecycle (active/paused/closed/expired)"
     },
     {
       "name": "Assignments",
-      "description": "Assign questionnaires to users (Company Admin, Supervisor)"
+      "description": "Assign questionnaires to users, bulk operations (Company Admin, Supervisor)"
+    },
+    {
+      "name": "Reminders",
+      "description": "Reminder registration for pending users (Supervisor+)"
     },
     {
       "name": "Responses",
@@ -975,7 +2517,11 @@
     },
     {
       "name": "Reports",
-      "description": "Aggregated reports and metrics (Company Admin, Supervisor)"
+      "description": "Analytics: completion, answer distribution, trends, individual reports, CSV export"
+    },
+    {
+      "name": "User Metadata",
+      "description": "Link users to companies and supervisors"
     }
   ]
 }

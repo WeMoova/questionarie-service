@@ -10,11 +10,37 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
+// CompanyDashboardItem represents a single questionnaire entry in the company dashboard
+type CompanyDashboardItem struct {
+	CompanyQuestionnaireID string                            `json:"company_questionnaire_id"`
+	QuestionnaireTitle     string                            `json:"questionnaire_title"`
+	Status                 models.CompanyQuestionnaireStatus `json:"status"`
+	PeriodStart            string                            `json:"period_start"`
+	PeriodEnd              string                            `json:"period_end"`
+	TotalAssigned          int                               `json:"total_assigned"`
+	Completed              int                               `json:"completed"`
+	InProgress             int                               `json:"in_progress"`
+	Pending                int                               `json:"pending"`
+	CompletionRate         float64                           `json:"completion_rate"`
+}
+
+// ReminderResult describes which users would receive a reminder
+type ReminderResult struct {
+	CompanyQuestionnaireID string   `json:"company_questionnaire_id"`
+	Target                 string   `json:"target"`
+	UserIDs                []string `json:"user_ids"`
+	Count                  int      `json:"count"`
+	RemindersSent          int      `json:"reminders_sent"`
+	LastReminderAt         *time.Time `json:"last_reminder_at,omitempty"`
+}
+
 // CompanyService handles business logic for companies
 type CompanyService struct {
 	companyRepo              *repository.CompanyRepository
 	companyQuestionnaireRepo *repository.CompanyQuestionnaireRepository
 	questionnaireRepo        *repository.QuestionnaireRepository
+	assignmentRepo           *repository.AssignmentRepository
+	userMetadataRepo         *repository.UserMetadataRepository
 }
 
 // NewCompanyService creates a new CompanyService
@@ -22,11 +48,15 @@ func NewCompanyService(
 	companyRepo *repository.CompanyRepository,
 	companyQuestionnaireRepo *repository.CompanyQuestionnaireRepository,
 	questionnaireRepo *repository.QuestionnaireRepository,
+	assignmentRepo *repository.AssignmentRepository,
+	userMetadataRepo *repository.UserMetadataRepository,
 ) *CompanyService {
 	return &CompanyService{
 		companyRepo:              companyRepo,
 		companyQuestionnaireRepo: companyQuestionnaireRepo,
 		questionnaireRepo:        questionnaireRepo,
+		assignmentRepo:           assignmentRepo,
+		userMetadataRepo:         userMetadataRepo,
 	}
 }
 
@@ -159,7 +189,7 @@ func (s *CompanyService) GetActiveCompanyQuestionnaires(ctx context.Context, com
 	return s.companyQuestionnaireRepo.GetActiveByCompanyAndPeriod(ctx, companyID)
 }
 
-// UpdateCompanyQuestionnaire updates a company questionnaire assignment
+// UpdateCompanyQuestionnaire updates a company questionnaire assignment period
 func (s *CompanyService) UpdateCompanyQuestionnaire(ctx context.Context, id primitive.ObjectID, periodStart, periodEnd time.Time, isActive bool) error {
 	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, id)
 	if err != nil {
@@ -176,6 +206,12 @@ func (s *CompanyService) UpdateCompanyQuestionnaire(ctx context.Context, id prim
 	}
 
 	cq.IsActive = isActive
+	// Sync status with isActive for backward compatibility
+	if isActive && (cq.Status == models.CQStatusPaused || cq.Status == models.CQStatusDraft) {
+		cq.Status = models.CQStatusActive
+	} else if !isActive && cq.Status == models.CQStatusActive {
+		cq.Status = models.CQStatusClosed
+	}
 
 	return s.companyQuestionnaireRepo.Update(ctx, id, cq)
 }
@@ -183,6 +219,268 @@ func (s *CompanyService) UpdateCompanyQuestionnaire(ctx context.Context, id prim
 // DeactivateCompanyQuestionnaire deactivates a company questionnaire
 func (s *CompanyService) DeactivateCompanyQuestionnaire(ctx context.Context, id primitive.ObjectID) error {
 	return s.companyQuestionnaireRepo.Deactivate(ctx, id)
+}
+
+// DeactivateCompany soft-deletes a company
+func (s *CompanyService) DeactivateCompany(ctx context.Context, id primitive.ObjectID) error {
+	company, err := s.companyRepo.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	company.IsActive = false
+	company.UpdatedAt = time.Now()
+	return s.companyRepo.Update(ctx, id, company)
+}
+
+// GetCompanyQuestionnaireByID retrieves a single CompanyQuestionnaire by ID with auth check
+func (s *CompanyService) GetCompanyQuestionnaireByID(ctx context.Context, id primitive.ObjectID, userID string, isSuperAdmin bool) (*models.CompanyQuestionnaire, error) {
+	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isSuperAdmin {
+		userMeta, err := s.userMetadataRepo.GetByID(ctx, userID)
+		if err != nil {
+			return nil, fmt.Errorf("user metadata not found: %w", err)
+		}
+		if cq.CompanyID != userMeta.CompanyID {
+			return nil, fmt.Errorf("unauthorized: company questionnaire not in your company")
+		}
+	}
+
+	return cq, nil
+}
+
+// ChangeCompanyQuestionnaireStatus transitions the status of a CompanyQuestionnaire
+func (s *CompanyService) ChangeCompanyQuestionnaireStatus(ctx context.Context, id primitive.ObjectID, newStatus models.CompanyQuestionnaireStatus, changedBy, reason string, isSuperAdmin bool) error {
+	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	if !isSuperAdmin {
+		userMeta, err := s.userMetadataRepo.GetByID(ctx, changedBy)
+		if err != nil {
+			return fmt.Errorf("user metadata not found: %w", err)
+		}
+		if cq.CompanyID != userMeta.CompanyID {
+			return fmt.Errorf("unauthorized: company questionnaire not in your company")
+		}
+	}
+
+	if err := cq.TransitionStatus(newStatus, changedBy, reason); err != nil {
+		return err
+	}
+
+	historyEntry := cq.StatusHistory[len(cq.StatusHistory)-1]
+	return s.companyQuestionnaireRepo.UpdateStatus(ctx, id, newStatus, historyEntry)
+}
+
+// GetQuestionnaireCompanies returns all companies that have a specific questionnaire assigned
+func (s *CompanyService) GetQuestionnaireCompanies(ctx context.Context, questionnaireID primitive.ObjectID) ([]map[string]interface{}, error) {
+	cqs, err := s.companyQuestionnaireRepo.GetByQuestionnaireID(ctx, questionnaireID)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]map[string]interface{}, 0, len(cqs))
+	for _, cq := range cqs {
+		company, err := s.companyRepo.GetByID(ctx, cq.CompanyID)
+		if err != nil {
+			continue
+		}
+		result = append(result, map[string]interface{}{
+			"company_questionnaire_id": cq.ID.Hex(),
+			"company_id":               cq.CompanyID.Hex(),
+			"company_name":             company.Name,
+			"status":                   cq.Status,
+			"period_start":             cq.PeriodStart.Format("2006-01-02"),
+			"period_end":               cq.PeriodEnd.Format("2006-01-02"),
+			"is_active":                cq.IsActive,
+		})
+	}
+
+	return result, nil
+}
+
+// AssignAllToCompany assigns a company questionnaire to every user in the company
+func (s *CompanyService) AssignAllToCompany(ctx context.Context, cqID primitive.ObjectID, assignedBy string, isSuperAdmin bool) ([]string, error) {
+	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, cqID)
+	if err != nil {
+		return nil, fmt.Errorf("company questionnaire not found: %w", err)
+	}
+
+	if !isSuperAdmin {
+		userMeta, err := s.userMetadataRepo.GetByID(ctx, assignedBy)
+		if err != nil {
+			return nil, fmt.Errorf("user metadata not found: %w", err)
+		}
+		if cq.CompanyID != userMeta.CompanyID {
+			return nil, fmt.Errorf("unauthorized: company questionnaire not in your company")
+		}
+	}
+
+	users, err := s.userMetadataRepo.GetByCompanyID(ctx, cq.CompanyID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get company users: %w", err)
+	}
+
+	userIDs := make([]string, 0, len(users))
+	for _, u := range users {
+		userIDs = append(userIDs, u.ID)
+	}
+
+	return userIDs, nil
+}
+
+// AssignToDepartment returns user IDs for a department within the company questionnaire's company
+func (s *CompanyService) AssignToDepartment(ctx context.Context, cqID primitive.ObjectID, department, assignedBy string, isSuperAdmin bool) ([]string, error) {
+	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, cqID)
+	if err != nil {
+		return nil, fmt.Errorf("company questionnaire not found: %w", err)
+	}
+
+	if !isSuperAdmin {
+		userMeta, err := s.userMetadataRepo.GetByID(ctx, assignedBy)
+		if err != nil {
+			return nil, fmt.Errorf("user metadata not found: %w", err)
+		}
+		if cq.CompanyID != userMeta.CompanyID {
+			return nil, fmt.Errorf("unauthorized: company questionnaire not in your company")
+		}
+	}
+
+	users, err := s.userMetadataRepo.GetByCompanyAndDepartment(ctx, cq.CompanyID, department)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get department users: %w", err)
+	}
+
+	userIDs := make([]string, 0, len(users))
+	for _, u := range users {
+		userIDs = append(userIDs, u.ID)
+	}
+
+	return userIDs, nil
+}
+
+// RegisterReminder records that a reminder was sent for a company questionnaire
+func (s *CompanyService) RegisterReminder(ctx context.Context, cqID primitive.ObjectID, target, userID string, isSuperAdmin bool) (*ReminderResult, error) {
+	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, cqID)
+	if err != nil {
+		return nil, fmt.Errorf("company questionnaire not found: %w", err)
+	}
+
+	if !isSuperAdmin {
+		userMeta, err := s.userMetadataRepo.GetByID(ctx, userID)
+		if err != nil {
+			return nil, fmt.Errorf("user metadata not found: %w", err)
+		}
+		if cq.CompanyID != userMeta.CompanyID {
+			return nil, fmt.Errorf("unauthorized: company questionnaire not in your company")
+		}
+	}
+
+	// Determine target users based on target param
+	var statusFilter *models.AssignmentStatus
+	switch target {
+	case "pending":
+		s := models.AssignmentStatusPending
+		statusFilter = &s
+	case "in_progress":
+		s := models.AssignmentStatusInProgress
+		statusFilter = &s
+	}
+
+	assignments, err := s.assignmentRepo.GetByCompanyQuestionnaireID(ctx, cqID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get assignments: %w", err)
+	}
+
+	targetUserIDs := make([]string, 0)
+	for _, a := range assignments {
+		if statusFilter == nil || a.Status == *statusFilter {
+			targetUserIDs = append(targetUserIDs, a.UserID)
+		}
+	}
+
+	now := time.Now()
+	if err := s.companyQuestionnaireRepo.UpdateReminder(ctx, cqID, now); err != nil {
+		return nil, fmt.Errorf("failed to register reminder: %w", err)
+	}
+
+	return &ReminderResult{
+		CompanyQuestionnaireID: cqID.Hex(),
+		Target:                 target,
+		UserIDs:                targetUserIDs,
+		Count:                  len(targetUserIDs),
+		RemindersSent:          cq.RemindersSent + 1,
+		LastReminderAt:         &now,
+	}, nil
+}
+
+// GetCompanyDashboard returns all company questionnaires with completion stats
+func (s *CompanyService) GetCompanyDashboard(ctx context.Context, companyID primitive.ObjectID, userID string, isSuperAdmin bool) ([]CompanyDashboardItem, error) {
+	if !isSuperAdmin {
+		userMeta, err := s.userMetadataRepo.GetByID(ctx, userID)
+		if err != nil {
+			return nil, fmt.Errorf("user metadata not found: %w", err)
+		}
+		if companyID != userMeta.CompanyID {
+			return nil, fmt.Errorf("unauthorized: cannot access other company dashboard")
+		}
+	}
+
+	cqs, err := s.companyQuestionnaireRepo.GetByCompanyID(ctx, companyID, false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get company questionnaires: %w", err)
+	}
+
+	items := make([]CompanyDashboardItem, 0, len(cqs))
+	for _, cq := range cqs {
+		questionnaire, err := s.questionnaireRepo.GetByID(ctx, cq.QuestionnaireID)
+		if err != nil {
+			continue
+		}
+
+		assignments, err := s.assignmentRepo.GetByCompanyQuestionnaireID(ctx, cq.ID)
+		if err != nil {
+			continue
+		}
+
+		var completed, inProgress, pending int
+		for _, a := range assignments {
+			switch a.Status {
+			case models.AssignmentStatusCompleted:
+				completed++
+			case models.AssignmentStatusInProgress:
+				inProgress++
+			case models.AssignmentStatusPending:
+				pending++
+			}
+		}
+
+		total := len(assignments)
+		rate := 0.0
+		if total > 0 {
+			rate = float64(completed) / float64(total) * 100
+		}
+
+		items = append(items, CompanyDashboardItem{
+			CompanyQuestionnaireID: cq.ID.Hex(),
+			QuestionnaireTitle:     questionnaire.Title,
+			Status:                 cq.Status,
+			PeriodStart:            cq.PeriodStart.Format("2006-01-02"),
+			PeriodEnd:              cq.PeriodEnd.Format("2006-01-02"),
+			TotalAssigned:          total,
+			Completed:              completed,
+			InProgress:             inProgress,
+			Pending:                pending,
+			CompletionRate:         rate,
+		})
+	}
+
+	return items, nil
 }
 
 // GetCompanyStats returns statistics about a company

@@ -22,7 +22,7 @@ func NewQuestionnaireService(repo *repository.QuestionnaireRepository) *Question
 }
 
 // CreateQuestionnaire creates a new questionnaire (Super Admin only)
-func (s *QuestionnaireService) CreateQuestionnaire(ctx context.Context, title, description, createdBy string) (*models.Questionnaire, error) {
+func (s *QuestionnaireService) CreateQuestionnaire(ctx context.Context, title, description, createdBy string, tags []string, categoryID *primitive.ObjectID) (*models.Questionnaire, error) {
 	if title == "" {
 		return nil, fmt.Errorf("title is required")
 	}
@@ -31,6 +31,12 @@ func (s *QuestionnaireService) CreateQuestionnaire(ctx context.Context, title, d
 	}
 
 	questionnaire := models.NewQuestionnaire(title, description, createdBy)
+	if tags != nil {
+		questionnaire.Tags = tags
+	}
+	if categoryID != nil {
+		questionnaire.CategoryID = categoryID
+	}
 
 	if err := s.repo.Create(ctx, questionnaire); err != nil {
 		return nil, fmt.Errorf("failed to create questionnaire: %w", err)
@@ -65,7 +71,7 @@ func (s *QuestionnaireService) GetQuestionnairesByCreator(ctx context.Context, c
 }
 
 // UpdateQuestionnaire updates a questionnaire
-func (s *QuestionnaireService) UpdateQuestionnaire(ctx context.Context, id primitive.ObjectID, title, description string, isActive bool) error {
+func (s *QuestionnaireService) UpdateQuestionnaire(ctx context.Context, id primitive.ObjectID, title, description string, isActive bool, tags []string, categoryID *primitive.ObjectID) error {
 	questionnaire, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		return err
@@ -78,8 +84,42 @@ func (s *QuestionnaireService) UpdateQuestionnaire(ctx context.Context, id primi
 		questionnaire.Description = description
 	}
 	questionnaire.IsActive = isActive
+	if tags != nil {
+		questionnaire.Tags = tags
+	}
+	if categoryID != nil {
+		questionnaire.CategoryID = categoryID
+	}
 
 	return s.repo.Update(ctx, id, questionnaire)
+}
+
+// GetQuestionnaireUsageStats returns per-questionnaire usage stats (companies assigned, total assignments)
+func (s *QuestionnaireService) GetQuestionnaireUsageStats(ctx context.Context, id primitive.ObjectID) (map[string]interface{}, error) {
+	q, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]interface{}{
+		"questionnaire_id":    q.ID.Hex(),
+		"title":               q.Title,
+		"is_active":           q.IsActive,
+		"total_questions":     len(q.Questions),
+		"required_questions":  countRequired(q.Questions),
+		"tags":                q.Tags,
+		"category_id":         q.CategoryID,
+	}, nil
+}
+
+func countRequired(questions []models.Question) int {
+	count := 0
+	for _, q := range questions {
+		if q.IsRequired {
+			count++
+		}
+	}
+	return count
 }
 
 // DeactivateQuestionnaire deactivates a questionnaire

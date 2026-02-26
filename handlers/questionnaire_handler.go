@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // QuestionnaireHandler handles questionnaire-related HTTP requests
@@ -26,8 +27,10 @@ func NewQuestionnaireHandler(service *services.QuestionnaireService) *Questionna
 // CreateQuestionnaire handles POST /api/v1/questionnaires
 func (h *QuestionnaireHandler) CreateQuestionnaire(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Title       string `json:"title"`
-		Description string `json:"description"`
+		Title       string   `json:"title"`
+		Description string   `json:"description"`
+		Tags        []string `json:"tags"`
+		CategoryID  string   `json:"category_id"`
 	}
 
 	if err := utils.ParseRequestBody(r, &req); err != nil {
@@ -35,8 +38,18 @@ func (h *QuestionnaireHandler) CreateQuestionnaire(w http.ResponseWriter, r *htt
 		return
 	}
 
+	var categoryID *primitive.ObjectID
+	if req.CategoryID != "" {
+		id, err := utils.ValidateObjectID(req.CategoryID)
+		if err != nil {
+			utils.BadRequest(w, "invalid category_id: "+err.Error())
+			return
+		}
+		categoryID = &id
+	}
+
 	claims, _ := middleware.GetUserFromContext(r.Context())
-	questionnaire, err := h.service.CreateQuestionnaire(r.Context(), req.Title, req.Description, claims.Sub)
+	questionnaire, err := h.service.CreateQuestionnaire(r.Context(), req.Title, req.Description, claims.Sub, req.Tags, categoryID)
 	if err != nil {
 		utils.HandleRepositoryError(w, err)
 		return
@@ -88,9 +101,11 @@ func (h *QuestionnaireHandler) UpdateQuestionnaire(w http.ResponseWriter, r *htt
 	}
 
 	var req struct {
-		Title       string `json:"title"`
-		Description string `json:"description"`
-		IsActive    *bool  `json:"is_active"`
+		Title       string   `json:"title"`
+		Description string   `json:"description"`
+		IsActive    *bool    `json:"is_active"`
+		Tags        []string `json:"tags"`
+		CategoryID  string   `json:"category_id"`
 	}
 
 	if err := utils.ParseRequestBody(r, &req); err != nil {
@@ -103,12 +118,40 @@ func (h *QuestionnaireHandler) UpdateQuestionnaire(w http.ResponseWriter, r *htt
 		isActive = *req.IsActive
 	}
 
-	if err := h.service.UpdateQuestionnaire(r.Context(), id, req.Title, req.Description, isActive); err != nil {
+	var categoryID *primitive.ObjectID
+	if req.CategoryID != "" {
+		cid, err := utils.ValidateObjectID(req.CategoryID)
+		if err != nil {
+			utils.BadRequest(w, "invalid category_id: "+err.Error())
+			return
+		}
+		categoryID = &cid
+	}
+
+	if err := h.service.UpdateQuestionnaire(r.Context(), id, req.Title, req.Description, isActive, req.Tags, categoryID); err != nil {
 		utils.HandleRepositoryError(w, err)
 		return
 	}
 
 	utils.RespondWithSuccess(w, http.StatusOK, nil, "Questionnaire updated successfully")
+}
+
+// GetQuestionnaireStats handles GET /api/v1/questionnaires/:id/stats
+func (h *QuestionnaireHandler) GetQuestionnaireStats(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := utils.ValidateObjectID(idStr)
+	if err != nil {
+		utils.BadRequest(w, err.Error())
+		return
+	}
+
+	stats, err := h.service.GetQuestionnaireUsageStats(r.Context(), id)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, stats, "")
 }
 
 // DeactivateQuestionnaire handles DELETE /api/v1/questionnaires/:id

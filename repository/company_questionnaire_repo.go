@@ -113,9 +113,11 @@ func (r *CompanyQuestionnaireRepository) GetActiveByCompanyAndPeriod(ctx context
 func (r *CompanyQuestionnaireRepository) Update(ctx context.Context, id primitive.ObjectID, cq *models.CompanyQuestionnaire) error {
 	update := bson.M{
 		"$set": bson.M{
-			"period_start": cq.PeriodStart,
-			"period_end":   cq.PeriodEnd,
-			"is_active":    cq.IsActive,
+			"period_start":    cq.PeriodStart,
+			"period_end":      cq.PeriodEnd,
+			"is_active":       cq.IsActive,
+			"status":          cq.Status,
+			"status_history":  cq.StatusHistory,
 		},
 	}
 
@@ -131,11 +133,56 @@ func (r *CompanyQuestionnaireRepository) Update(ctx context.Context, id primitiv
 	return nil
 }
 
+// UpdateStatus updates the status and pushes a history entry
+func (r *CompanyQuestionnaireRepository) UpdateStatus(ctx context.Context, id primitive.ObjectID, newStatus models.CompanyQuestionnaireStatus, historyEntry models.StatusChange) error {
+	isActive := newStatus == models.CQStatusActive
+	update := bson.M{
+		"$set": bson.M{
+			"status":    newStatus,
+			"is_active": isActive,
+		},
+		"$push": bson.M{
+			"status_history": historyEntry,
+		},
+	}
+
+	result, err := r.collection.UpdateOne(ctx, bson.M{"_id": id}, update)
+	if err != nil {
+		return fmt.Errorf("failed to update status: %w", err)
+	}
+
+	if result.MatchedCount == 0 {
+		return fmt.Errorf("company questionnaire not found")
+	}
+
+	return nil
+}
+
+// UpdateReminder increments the reminder counter and sets last reminder timestamp
+func (r *CompanyQuestionnaireRepository) UpdateReminder(ctx context.Context, id primitive.ObjectID, sentAt time.Time) error {
+	update := bson.M{
+		"$inc": bson.M{"reminders_sent": 1},
+		"$set": bson.M{"last_reminder_at": sentAt},
+	}
+
+	result, err := r.collection.UpdateOne(ctx, bson.M{"_id": id}, update)
+	if err != nil {
+		return fmt.Errorf("failed to update reminder: %w", err)
+	}
+
+	if result.MatchedCount == 0 {
+		return fmt.Errorf("company questionnaire not found")
+	}
+
+	return nil
+}
+
 // Deactivate deactivates a company questionnaire
 func (r *CompanyQuestionnaireRepository) Deactivate(ctx context.Context, id primitive.ObjectID) error {
 	update := bson.M{
 		"$set": bson.M{
 			"is_active": false,
+			"status":    models.CQStatusClosed,
 		},
 	}
 

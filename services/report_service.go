@@ -1,10 +1,14 @@
 package services
 
 import (
+	"bytes"
 	"context"
+	"encoding/csv"
 	"fmt"
 	"questionarie-service/models"
 	"questionarie-service/repository"
+	"strconv"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
@@ -384,4 +388,358 @@ func (s *ReportService) GetEmployeeProgress(ctx context.Context, companyID primi
 	}
 
 	return progress, nil
+}
+
+// QuestionAnswerDistribution holds answer stats for a single question
+type QuestionAnswerDistribution struct {
+	QuestionID   string                 `json:"question_id"`
+	QuestionText string                 `json:"question_text"`
+	QuestionType string                 `json:"question_type"`
+	TotalAnswers int                    `json:"total_answers"`
+	Distribution map[string]int         `json:"distribution"`
+	Average      *float64               `json:"average,omitempty"`
+}
+
+// GetAnswerDistribution returns answer distribution per question for a company questionnaire
+func (s *ReportService) GetAnswerDistribution(ctx context.Context, cqID primitive.ObjectID, userID string, isSuperAdmin bool) ([]QuestionAnswerDistribution, error) {
+	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, cqID)
+	if err != nil {
+		return nil, fmt.Errorf("company questionnaire not found: %w", err)
+	}
+
+	if !isSuperAdmin {
+		userMeta, err := s.userMetadataRepo.GetByID(ctx, userID)
+		if err != nil {
+			return nil, fmt.Errorf("user metadata not found: %w", err)
+		}
+		if cq.CompanyID != userMeta.CompanyID {
+			return nil, fmt.Errorf("unauthorized: cannot access reports from other companies")
+		}
+	}
+
+	questionnaire, err := s.questionnaireRepo.GetByID(ctx, cq.QuestionnaireID)
+	if err != nil {
+		return nil, fmt.Errorf("questionnaire not found: %w", err)
+	}
+
+	assignments, err := s.assignmentRepo.GetByCompanyQuestionnaireID(ctx, cqID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get assignments: %w", err)
+	}
+
+	// Build distribution per question
+	result := make([]QuestionAnswerDistribution, 0, len(questionnaire.Questions))
+	for _, q := range questionnaire.Questions {
+		dist := QuestionAnswerDistribution{
+			QuestionID:   q.QuestionID,
+			QuestionText: q.QuestionText,
+			QuestionType: string(q.QuestionType),
+			Distribution: make(map[string]int),
+		}
+
+		var numericSum float64
+		numericCount := 0
+
+		for _, a := range assignments {
+			if a.Status != models.AssignmentStatusCompleted {
+				continue
+			}
+			for _, r := range a.Responses {
+				if r.QuestionID != q.QuestionID {
+					continue
+				}
+				dist.TotalAnswers++
+				// Extract the "value" key from the response map for distribution
+				val := r.ResponseValue["value"]
+				key := fmt.Sprintf("%v", val)
+				dist.Distribution[key]++
+
+				// Try numeric average for likert/numeric types
+				if q.QuestionType == models.QuestionTypeLikertScale {
+					if num, ok := val.(float64); ok {
+						numericSum += num
+						numericCount++
+					}
+				}
+			}
+		}
+
+		if numericCount > 0 {
+			avg := numericSum / float64(numericCount)
+			dist.Average = &avg
+		}
+
+		result = append(result, dist)
+	}
+
+	return result, nil
+}
+
+// TrendPeriod holds completion data for a single time period
+type TrendPeriod struct {
+	CompanyQuestionnaireID string    `json:"company_questionnaire_id"`
+	PeriodStart            string    `json:"period_start"`
+	PeriodEnd              string    `json:"period_end"`
+	TotalAssigned          int       `json:"total_assigned"`
+	Completed              int       `json:"completed"`
+	CompletionRate         float64   `json:"completion_rate"`
+	AvgTimeMinutes         float64   `json:"avg_time_minutes"`
+}
+
+// GetTrends compares completion across multiple periods for the same questionnaire in a company
+func (s *ReportService) GetTrends(ctx context.Context, companyID primitive.ObjectID, userID string, isSuperAdmin bool) ([]TrendPeriod, error) {
+	if !isSuperAdmin {
+		userMeta, err := s.userMetadataRepo.GetByID(ctx, userID)
+		if err != nil {
+			return nil, fmt.Errorf("user metadata not found: %w", err)
+		}
+		if companyID != userMeta.CompanyID {
+			return nil, fmt.Errorf("unauthorized: cannot access reports from other companies")
+		}
+	}
+
+	cqs, err := s.companyQuestionnaireRepo.GetByCompanyID(ctx, companyID, false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get company questionnaires: %w", err)
+	}
+
+	trends := make([]TrendPeriod, 0, len(cqs))
+	for _, cq := range cqs {
+		assignments, err := s.assignmentRepo.GetByCompanyQuestionnaireID(ctx, cq.ID)
+		if err != nil {
+			continue
+		}
+
+		completed := 0
+		var totalMs float64
+		completedCount := 0
+		for _, a := range assignments {
+			if a.Status == models.AssignmentStatusCompleted {
+				completed++
+				if a.StartedAt != nil && a.CompletedAt != nil {
+					totalMs += a.CompletedAt.Sub(*a.StartedAt).Minutes()
+					completedCount++
+				}
+			}
+		}
+
+		total := len(assignments)
+		rate := 0.0
+		if total > 0 {
+			rate = float64(completed) / float64(total) * 100
+		}
+		avgTime := 0.0
+		if completedCount > 0 {
+			avgTime = totalMs / float64(completedCount)
+		}
+
+		trends = append(trends, TrendPeriod{
+			CompanyQuestionnaireID: cq.ID.Hex(),
+			PeriodStart:            cq.PeriodStart.Format("2006-01-02"),
+			PeriodEnd:              cq.PeriodEnd.Format("2006-01-02"),
+			TotalAssigned:          total,
+			Completed:              completed,
+			CompletionRate:         rate,
+			AvgTimeMinutes:         avgTime,
+		})
+	}
+
+	return trends, nil
+}
+
+// IndividualReport holds full report for a single employee assignment
+type IndividualReport struct {
+	AssignmentID   string                 `json:"assignment_id"`
+	UserID         string                 `json:"user_id"`
+	Status         models.AssignmentStatus `json:"status"`
+	AssignedAt     string                 `json:"assigned_at"`
+	StartedAt      *string                `json:"started_at,omitempty"`
+	CompletedAt    *string                `json:"completed_at,omitempty"`
+	TimeToComplete *float64               `json:"time_to_complete_minutes,omitempty"`
+	TotalQuestions int                    `json:"total_questions"`
+	AnsweredCount  int                    `json:"answered_count"`
+	ProgressPct    float64                `json:"progress_pct"`
+	Responses      []ResponseDetail       `json:"responses"`
+}
+
+// ResponseDetail enriches a response with the question text
+type ResponseDetail struct {
+	QuestionID    string      `json:"question_id"`
+	QuestionText  string      `json:"question_text"`
+	QuestionType  string      `json:"question_type"`
+	ResponseValue interface{} `json:"response_value"`
+	AnsweredAt    string      `json:"answered_at"`
+}
+
+// GetIndividualReport returns a full report for a single assignment
+func (s *ReportService) GetIndividualReport(ctx context.Context, assignmentID primitive.ObjectID, userID string, isSuperAdmin bool) (*IndividualReport, error) {
+	assignment, err := s.assignmentRepo.GetByID(ctx, assignmentID)
+	if err != nil {
+		return nil, err
+	}
+
+	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, assignment.CompanyQuestionnaireID)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isSuperAdmin {
+		userMeta, err := s.userMetadataRepo.GetByID(ctx, userID)
+		if err != nil {
+			return nil, fmt.Errorf("user metadata not found: %w", err)
+		}
+		if cq.CompanyID != userMeta.CompanyID {
+			return nil, fmt.Errorf("unauthorized: cannot access this assignment report")
+		}
+	}
+
+	questionnaire, err := s.questionnaireRepo.GetByID(ctx, cq.QuestionnaireID)
+	if err != nil {
+		return nil, err
+	}
+
+	questionMap := make(map[string]models.Question)
+	for _, q := range questionnaire.Questions {
+		questionMap[q.QuestionID] = q
+	}
+
+	details := make([]ResponseDetail, 0, len(assignment.Responses))
+	for _, r := range assignment.Responses {
+		q, ok := questionMap[r.QuestionID]
+		if !ok {
+			continue
+		}
+		details = append(details, ResponseDetail{
+			QuestionID:    r.QuestionID,
+			QuestionText:  q.QuestionText,
+			QuestionType:  string(q.QuestionType),
+			ResponseValue: r.GetValue(),
+			AnsweredAt:    r.AnsweredAt.Format("2006-01-02T15:04:05Z"),
+		})
+	}
+
+	totalQ := len(questionnaire.Questions)
+	progressPct := 0.0
+	if totalQ > 0 {
+		progressPct = float64(len(assignment.Responses)) / float64(totalQ) * 100
+	}
+
+	report := &IndividualReport{
+		AssignmentID:   assignment.ID.Hex(),
+		UserID:         assignment.UserID,
+		Status:         assignment.Status,
+		AssignedAt:     assignment.AssignedAt.Format("2006-01-02T15:04:05Z"),
+		TotalQuestions: totalQ,
+		AnsweredCount:  len(assignment.Responses),
+		ProgressPct:    progressPct,
+		Responses:      details,
+	}
+
+	if assignment.StartedAt != nil {
+		s := assignment.StartedAt.Format("2006-01-02T15:04:05Z")
+		report.StartedAt = &s
+	}
+	if assignment.CompletedAt != nil {
+		s := assignment.CompletedAt.Format("2006-01-02T15:04:05Z")
+		report.CompletedAt = &s
+		if assignment.StartedAt != nil {
+			mins := assignment.CompletedAt.Sub(*assignment.StartedAt).Minutes()
+			report.TimeToComplete = &mins
+		}
+	}
+
+	return report, nil
+}
+
+// ExportCSV generates an anonymized CSV of all completed responses for a company questionnaire
+func (s *ReportService) ExportCSV(ctx context.Context, cqID primitive.ObjectID, userID string, isSuperAdmin bool) ([]byte, error) {
+	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, cqID)
+	if err != nil {
+		return nil, fmt.Errorf("company questionnaire not found: %w", err)
+	}
+
+	if !isSuperAdmin {
+		userMeta, err := s.userMetadataRepo.GetByID(ctx, userID)
+		if err != nil {
+			return nil, fmt.Errorf("user metadata not found: %w", err)
+		}
+		if cq.CompanyID != userMeta.CompanyID {
+			return nil, fmt.Errorf("unauthorized: cannot export from other companies")
+		}
+	}
+
+	questionnaire, err := s.questionnaireRepo.GetByID(ctx, cq.QuestionnaireID)
+	if err != nil {
+		return nil, err
+	}
+
+	assignments, err := s.assignmentRepo.GetByCompanyQuestionnaireID(ctx, cqID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Fetch user metadata for department info (anonymized)
+	users, err := s.userMetadataRepo.GetByCompanyID(ctx, cq.CompanyID)
+	if err != nil {
+		return nil, err
+	}
+	userDept := make(map[string]string)
+	for _, u := range users {
+		userDept[u.ID] = u.Department
+	}
+
+	var buf bytes.Buffer
+	w := csv.NewWriter(&buf)
+
+	// Header row
+	header := []string{"row_id", "department", "status", "assigned_at", "completed_at", "time_to_complete_minutes"}
+	for _, q := range questionnaire.Questions {
+		header = append(header, q.QuestionText)
+	}
+	w.Write(header)
+
+	rowNum := 1
+	for _, a := range assignments {
+		if a.Status != models.AssignmentStatusCompleted {
+			continue
+		}
+
+		row := []string{
+			strconv.Itoa(rowNum),
+			userDept[a.UserID],
+			string(a.Status),
+			a.AssignedAt.Format(time.RFC3339),
+		}
+
+		if a.CompletedAt != nil {
+			row = append(row, a.CompletedAt.Format(time.RFC3339))
+			if a.StartedAt != nil {
+				mins := a.CompletedAt.Sub(*a.StartedAt).Minutes()
+				row = append(row, fmt.Sprintf("%.1f", mins))
+			} else {
+				row = append(row, "")
+			}
+		} else {
+			row = append(row, "", "")
+		}
+
+		// Response per question (in order)
+		responseMap := make(map[string]string)
+		for _, r := range a.Responses {
+			responseMap[r.QuestionID] = fmt.Sprintf("%v", r.GetValue())
+		}
+		for _, q := range questionnaire.Questions {
+			row = append(row, responseMap[q.QuestionID])
+		}
+
+		w.Write(row)
+		rowNum++
+	}
+
+	w.Flush()
+	if err := w.Error(); err != nil {
+		return nil, fmt.Errorf("failed to write CSV: %w", err)
+	}
+
+	return buf.Bytes(), nil
 }

@@ -98,6 +98,8 @@ func (r *QuestionnaireRepository) Update(ctx context.Context, id primitive.Objec
 			"description": questionnaire.Description,
 			"is_active":   questionnaire.IsActive,
 			"questions":   questionnaire.Questions,
+			"tags":        questionnaire.Tags,
+			"category_id": questionnaire.CategoryID,
 			"updated_at":  questionnaire.UpdatedAt,
 		},
 	}
@@ -198,6 +200,22 @@ func (r *QuestionnaireRepository) RemoveQuestion(ctx context.Context, questionna
 	}
 
 	return nil
+}
+
+// GetByCategoryID retrieves questionnaires belonging to a category
+func (r *QuestionnaireRepository) GetByCategoryID(ctx context.Context, categoryID primitive.ObjectID) ([]*models.Questionnaire, error) {
+	cursor, err := r.collection.Find(ctx, bson.M{"category_id": categoryID})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get questionnaires by category: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	var questionnaires []*models.Questionnaire
+	if err = cursor.All(ctx, &questionnaires); err != nil {
+		return nil, fmt.Errorf("failed to decode questionnaires: %w", err)
+	}
+
+	return questionnaires, nil
 }
 
 // Count returns the total number of questionnaires

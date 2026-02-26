@@ -83,3 +83,90 @@ func (h *ReportHandler) GetEmployeeProgress(w http.ResponseWriter, r *http.Reque
 
 	utils.RespondWithSuccess(w, http.StatusOK, progress, "")
 }
+
+// GetAnswerDistribution handles GET /api/v1/reports/company-questionnaire/:cq_id/answers
+func (h *ReportHandler) GetAnswerDistribution(w http.ResponseWriter, r *http.Request) {
+	cqIDStr := chi.URLParam(r, "cq_id")
+	cqID, err := utils.ValidateObjectID(cqIDStr)
+	if err != nil {
+		utils.BadRequest(w, err.Error())
+		return
+	}
+
+	claims, _ := middleware.GetUserFromContext(r.Context())
+	isSuperAdmin := middleware.IsSuperAdmin(r.Context())
+
+	distribution, err := h.service.GetAnswerDistribution(r.Context(), cqID, claims.Sub, isSuperAdmin)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, distribution, "")
+}
+
+// GetTrends handles GET /api/v1/reports/company/:company_id/trends
+func (h *ReportHandler) GetTrends(w http.ResponseWriter, r *http.Request) {
+	companyIDStr := chi.URLParam(r, "company_id")
+	companyID, err := utils.ValidateObjectID(companyIDStr)
+	if err != nil {
+		utils.BadRequest(w, err.Error())
+		return
+	}
+
+	claims, _ := middleware.GetUserFromContext(r.Context())
+	isSuperAdmin := middleware.IsSuperAdmin(r.Context())
+
+	trends, err := h.service.GetTrends(r.Context(), companyID, claims.Sub, isSuperAdmin)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, trends, "")
+}
+
+// GetIndividualReport handles GET /api/v1/reports/assignments/:id
+func (h *ReportHandler) GetIndividualReport(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := utils.ValidateObjectID(idStr)
+	if err != nil {
+		utils.BadRequest(w, err.Error())
+		return
+	}
+
+	claims, _ := middleware.GetUserFromContext(r.Context())
+	isSuperAdmin := middleware.IsSuperAdmin(r.Context())
+
+	report, err := h.service.GetIndividualReport(r.Context(), id, claims.Sub, isSuperAdmin)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, report, "")
+}
+
+// ExportCSV handles GET /api/v1/reports/company-questionnaire/:cq_id/export
+func (h *ReportHandler) ExportCSV(w http.ResponseWriter, r *http.Request) {
+	cqIDStr := chi.URLParam(r, "cq_id")
+	cqID, err := utils.ValidateObjectID(cqIDStr)
+	if err != nil {
+		utils.BadRequest(w, err.Error())
+		return
+	}
+
+	claims, _ := middleware.GetUserFromContext(r.Context())
+	isSuperAdmin := middleware.IsSuperAdmin(r.Context())
+
+	data, err := h.service.ExportCSV(r.Context(), cqID, claims.Sub, isSuperAdmin)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/csv")
+	w.Header().Set("Content-Disposition", "attachment; filename=\"questionnaire_responses.csv\"")
+	w.WriteHeader(http.StatusOK)
+	w.Write(data)
+}

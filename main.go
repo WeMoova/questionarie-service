@@ -38,13 +38,15 @@ func main() {
 	companyQuestionnaireRepo := repository.NewCompanyQuestionnaireRepository(mongodb.Database)
 	assignmentRepo := repository.NewAssignmentRepository(mongodb.Database)
 	userMetadataRepo := repository.NewUserMetadataRepository(mongodb.Database)
+	categoryRepo := repository.NewCategoryRepository(mongodb.Database)
 
 	// Initialize services
 	questionnaireService := services.NewQuestionnaireService(questionnaireRepo)
-	companyService := services.NewCompanyService(companyRepo, companyQuestionnaireRepo, questionnaireRepo)
+	companyService := services.NewCompanyService(companyRepo, companyQuestionnaireRepo, questionnaireRepo, assignmentRepo, userMetadataRepo)
 	userMetadataService := services.NewUserMetadataService(userMetadataRepo, companyRepo)
 	assignmentService := services.NewAssignmentService(assignmentRepo, companyQuestionnaireRepo, userMetadataRepo, questionnaireRepo)
 	reportService := services.NewReportService(assignmentRepo, companyQuestionnaireRepo, userMetadataRepo, questionnaireRepo, companyRepo)
+	categoryService := services.NewCategoryService(categoryRepo, questionnaireRepo)
 
 	// Initialize handlers
 	questionnaireHandler := handlers.NewQuestionnaireHandler(questionnaireService)
@@ -53,6 +55,7 @@ func main() {
 	assignmentHandler := handlers.NewAssignmentHandler(assignmentService)
 	responseHandler := handlers.NewResponseHandler(assignmentService)
 	reportHandler := handlers.NewReportHandler(reportService)
+	categoryHandler := handlers.NewCategoryHandler(categoryService)
 
 	// Create router
 	r := chi.NewRouter()
@@ -131,9 +134,21 @@ func main() {
 				r.Get("/api/v1/companies", companyHandler.GetCompanies)
 				r.Get("/api/v1/companies/{id}", companyHandler.GetCompanyByID)
 				r.Put("/api/v1/companies/{id}", companyHandler.UpdateCompany)
+				r.Delete("/api/v1/companies/{id}", companyHandler.DeleteCompany)
 
 				// Assign questionnaire to company
 				r.Post("/api/v1/companies/{company_id}/questionnaires", companyHandler.AssignQuestionnaireToCompany)
+
+				// Questionnaire stats & companies that use a questionnaire
+				r.Get("/api/v1/questionnaires/{id}/stats", questionnaireHandler.GetQuestionnaireStats)
+				r.Get("/api/v1/questionnaires/{id}/companies", companyHandler.GetQuestionnaireCompanies)
+
+				// Categories (Super Admin only)
+				r.Post("/api/v1/questionnaire-categories", categoryHandler.CreateCategory)
+				r.Get("/api/v1/questionnaire-categories", categoryHandler.GetCategories)
+				r.Get("/api/v1/questionnaire-categories/{id}", categoryHandler.GetCategoryByID)
+				r.Put("/api/v1/questionnaire-categories/{id}", categoryHandler.UpdateCategory)
+				r.Get("/api/v1/questionnaire-categories/{id}/questionnaires", categoryHandler.GetCategoryQuestionnaires)
 			})
 
 			// === User Metadata - Get My Metadata (All authenticated users) ===
@@ -159,21 +174,47 @@ func main() {
 				r.Get("/api/v1/companies/{company_id}/users", userMetadataHandler.GetUsersByCompany)
 			})
 
-			// === Company Questionnaires (Super Admin, Company Admin) ===
+			// === Company Questionnaires (Company Admin+) ===
 			r.Group(func(r chi.Router) {
 				r.Use(authMiddleware.RequireCompanyAdmin())
 
 				r.Get("/api/v1/companies/{company_id}/questionnaires", companyHandler.GetCompanyQuestionnaires)
+				r.Get("/api/v1/company-questionnaires/{id}", companyHandler.GetCompanyQuestionnaire)
 				r.Put("/api/v1/company-questionnaires/{id}", companyHandler.UpdateCompanyQuestionnaire)
+
+				// Lifecycle transitions
+				r.Post("/api/v1/company-questionnaires/{id}/activate", companyHandler.ActivateCompanyQuestionnaire)
+				r.Post("/api/v1/company-questionnaires/{id}/pause", companyHandler.PauseCompanyQuestionnaire)
+				r.Post("/api/v1/company-questionnaires/{id}/close", companyHandler.CloseCompanyQuestionnaire)
+
+				// Bulk assignment
+				r.Post("/api/v1/company-questionnaires/{cq_id}/assign-all", companyHandler.AssignAllToCompany)
+				r.Post("/api/v1/company-questionnaires/{cq_id}/assign-department", companyHandler.AssignToDepartment)
+
+				// Company dashboard
+				r.Get("/api/v1/companies/{company_id}/dashboard", companyHandler.GetCompanyDashboard)
 			})
 
-			// === Assignments (Company Admin, Supervisor) ===
+			// === Assignments (Supervisor+) ===
 			r.Group(func(r chi.Router) {
 				r.Use(authMiddleware.RequireSupervisor())
 
 				// Assign questionnaires to users
 				r.Post("/api/v1/company-questionnaires/{cq_id}/assignments", assignmentHandler.AssignToUsers)
 				r.Get("/api/v1/company-questionnaires/{cq_id}/assignments", assignmentHandler.GetAssignmentsByCompanyQuestionnaire)
+				r.Delete("/api/v1/company-questionnaires/{cq_id}/assignments", assignmentHandler.CancelAllAssignments)
+
+				// Progress & visibility
+				r.Get("/api/v1/company-questionnaires/{cq_id}/progress", assignmentHandler.GetAssignmentProgress)
+				r.Get("/api/v1/company-questionnaires/{cq_id}/pending-users", assignmentHandler.GetPendingUsers)
+				r.Get("/api/v1/company-questionnaires/{cq_id}/in-progress-users", assignmentHandler.GetInProgressUsers)
+				r.Get("/api/v1/company-questionnaires/{cq_id}/completed-users", assignmentHandler.GetCompletedUsers)
+
+				// Reminders
+				r.Post("/api/v1/company-questionnaires/{cq_id}/remind", companyHandler.SendReminder)
+
+				// Cancel individual assignment
+				r.Post("/api/v1/assignments/{id}/cancel", assignmentHandler.CancelAssignment)
 
 				// View company/team questionnaires
 				r.Get("/api/v1/my-company/questionnaires", assignmentHandler.GetMyCompanyQuestionnaires)
@@ -194,13 +235,23 @@ func main() {
 				r.Post("/api/v1/assignments/{id}/submit", responseHandler.SubmitAssignment)
 			})
 
-			// === Reports (Company Admin, Supervisor) ===
+			// === Reports (Supervisor+) ===
 			r.Group(func(r chi.Router) {
 				r.Use(authMiddleware.RequireSupervisor())
 
 				r.Get("/api/v1/reports/company-questionnaire/{cq_id}/completion", reportHandler.GetCompletionMetrics)
 				r.Get("/api/v1/reports/company/{company_id}/overview", reportHandler.GetCompanyOverview)
 				r.Get("/api/v1/reports/company/{company_id}/employees-progress", reportHandler.GetEmployeeProgress)
+				r.Get("/api/v1/reports/assignments/{id}", reportHandler.GetIndividualReport)
+			})
+
+			// === Reports avanzados (Company Admin+) ===
+			r.Group(func(r chi.Router) {
+				r.Use(authMiddleware.RequireCompanyAdmin())
+
+				r.Get("/api/v1/reports/company-questionnaire/{cq_id}/answers", reportHandler.GetAnswerDistribution)
+				r.Get("/api/v1/reports/company/{company_id}/trends", reportHandler.GetTrends)
+				r.Get("/api/v1/reports/company-questionnaire/{cq_id}/export", reportHandler.ExportCSV)
 			})
 		})
 	})

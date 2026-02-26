@@ -134,6 +134,76 @@ func (r *AssignmentRepository) UpdateStatus(ctx context.Context, id primitive.Ob
 	return nil
 }
 
+// CancelAssignment marks a single assignment as cancelled
+func (r *AssignmentRepository) CancelAssignment(ctx context.Context, id primitive.ObjectID, cancelledBy, reason string) error {
+	now := time.Now()
+	update := bson.M{
+		"$set": bson.M{
+			"status":        models.AssignmentStatusCancelled,
+			"cancelled_at":  now,
+			"cancelled_by":  cancelledBy,
+			"cancel_reason": reason,
+		},
+	}
+
+	result, err := r.collection.UpdateOne(ctx, bson.M{"_id": id}, update)
+	if err != nil {
+		return fmt.Errorf("failed to cancel assignment: %w", err)
+	}
+
+	if result.MatchedCount == 0 {
+		return fmt.Errorf("assignment not found")
+	}
+
+	return nil
+}
+
+// CancelAllPendingByCompanyQuestionnaire cancels all pending assignments for a company questionnaire
+func (r *AssignmentRepository) CancelAllPendingByCompanyQuestionnaire(ctx context.Context, cqID primitive.ObjectID, cancelledBy, reason string) (int64, error) {
+	now := time.Now()
+	filter := bson.M{
+		"company_questionnaire_id": cqID,
+		"status":                   bson.M{"$in": []models.AssignmentStatus{models.AssignmentStatusPending, models.AssignmentStatusInProgress}},
+	}
+	update := bson.M{
+		"$set": bson.M{
+			"status":        models.AssignmentStatusCancelled,
+			"cancelled_at":  now,
+			"cancelled_by":  cancelledBy,
+			"cancel_reason": reason,
+		},
+	}
+
+	result, err := r.collection.UpdateMany(ctx, filter, update)
+	if err != nil {
+		return 0, fmt.Errorf("failed to cancel assignments: %w", err)
+	}
+
+	return result.ModifiedCount, nil
+}
+
+// GetByCompanyQuestionnaireIDAndStatus retrieves assignments filtered by status
+func (r *AssignmentRepository) GetByCompanyQuestionnaireIDAndStatus(ctx context.Context, cqID primitive.ObjectID, status models.AssignmentStatus) ([]*models.UserQuestionnaireAssignment, error) {
+	filter := bson.M{
+		"company_questionnaire_id": cqID,
+		"status":                   status,
+	}
+
+	opts := options.Find().SetSort(bson.D{{Key: "assigned_at", Value: -1}})
+	cursor, err := r.collection.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get assignments by status: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	var assignments []*models.UserQuestionnaireAssignment
+	if err = cursor.All(ctx, &assignments); err != nil {
+		return nil, fmt.Errorf("failed to decode assignments: %w", err)
+	}
+
+	return assignments, nil
+}
+
 // AddOrUpdateResponse adds or updates a response in an assignment
 func (r *AssignmentRepository) AddOrUpdateResponse(ctx context.Context, assignmentID primitive.ObjectID, response models.Response) error {
 	// First, try to update existing response

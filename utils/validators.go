@@ -176,6 +176,6 @@ func ValidateQuestionType(qType string) error {
 
 // ValidateAssignmentStatus validates assignment status
 func ValidateAssignmentStatus(status string) error {
-	allowedStatuses := []string{"pending", "in_progress", "completed"}
+	allowedStatuses := []string{"pending", "in_progress", "completed", "cancelled"}
 	return ValidateEnum(status, allowedStatuses, "status")
 }

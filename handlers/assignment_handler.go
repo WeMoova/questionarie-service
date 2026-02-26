@@ -153,3 +153,112 @@ func (h *AssignmentHandler) GetMyTeamAssignments(w http.ResponseWriter, r *http.
 
 	utils.RespondWithSuccess(w, http.StatusOK, assignments, "")
 }
+
+// CancelAssignment handles POST /api/v1/assignments/:id/cancel
+func (h *AssignmentHandler) CancelAssignment(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := utils.ValidateObjectID(idStr)
+	if err != nil {
+		utils.BadRequest(w, err.Error())
+		return
+	}
+
+	var req struct {
+		Reason string `json:"reason"`
+	}
+	utils.ParseRequestBody(r, &req)
+
+	claims, _ := middleware.GetUserFromContext(r.Context())
+	isSuperAdmin := middleware.IsSuperAdmin(r.Context())
+
+	if err := h.service.CancelAssignment(r.Context(), id, claims.Sub, req.Reason, isSuperAdmin); err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, nil, "Assignment cancelled successfully")
+}
+
+// CancelAllAssignments handles DELETE /api/v1/company-questionnaires/:cq_id/assignments
+func (h *AssignmentHandler) CancelAllAssignments(w http.ResponseWriter, r *http.Request) {
+	cqIDStr := chi.URLParam(r, "cq_id")
+	cqID, err := utils.ValidateObjectID(cqIDStr)
+	if err != nil {
+		utils.BadRequest(w, err.Error())
+		return
+	}
+
+	var req struct {
+		Reason string `json:"reason"`
+	}
+	utils.ParseRequestBody(r, &req)
+
+	claims, _ := middleware.GetUserFromContext(r.Context())
+	isSuperAdmin := middleware.IsSuperAdmin(r.Context())
+
+	count, err := h.service.CancelAllPendingByCompanyQuestionnaire(r.Context(), cqID, claims.Sub, req.Reason, isSuperAdmin)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, map[string]interface{}{
+		"cancelled_count": count,
+	}, "Assignments cancelled successfully")
+}
+
+// GetAssignmentProgress handles GET /api/v1/company-questionnaires/:cq_id/progress
+func (h *AssignmentHandler) GetAssignmentProgress(w http.ResponseWriter, r *http.Request) {
+	cqIDStr := chi.URLParam(r, "cq_id")
+	cqID, err := utils.ValidateObjectID(cqIDStr)
+	if err != nil {
+		utils.BadRequest(w, err.Error())
+		return
+	}
+
+	claims, _ := middleware.GetUserFromContext(r.Context())
+	isSuperAdmin := middleware.IsSuperAdmin(r.Context())
+
+	progress, err := h.service.GetAssignmentProgress(r.Context(), cqID, claims.Sub, isSuperAdmin)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, progress, "")
+}
+
+// GetPendingUsers handles GET /api/v1/company-questionnaires/:cq_id/pending-users
+func (h *AssignmentHandler) GetPendingUsers(w http.ResponseWriter, r *http.Request) {
+	h.getAssignmentsByStatus(w, r, models.AssignmentStatusPending)
+}
+
+// GetInProgressUsers handles GET /api/v1/company-questionnaires/:cq_id/in-progress-users
+func (h *AssignmentHandler) GetInProgressUsers(w http.ResponseWriter, r *http.Request) {
+	h.getAssignmentsByStatus(w, r, models.AssignmentStatusInProgress)
+}
+
+// GetCompletedUsers handles GET /api/v1/company-questionnaires/:cq_id/completed-users
+func (h *AssignmentHandler) GetCompletedUsers(w http.ResponseWriter, r *http.Request) {
+	h.getAssignmentsByStatus(w, r, models.AssignmentStatusCompleted)
+}
+
+func (h *AssignmentHandler) getAssignmentsByStatus(w http.ResponseWriter, r *http.Request, status models.AssignmentStatus) {
+	cqIDStr := chi.URLParam(r, "cq_id")
+	cqID, err := utils.ValidateObjectID(cqIDStr)
+	if err != nil {
+		utils.BadRequest(w, err.Error())
+		return
+	}
+
+	claims, _ := middleware.GetUserFromContext(r.Context())
+	isSuperAdmin := middleware.IsSuperAdmin(r.Context())
+
+	assignments, err := h.service.GetAssignmentsByStatus(r.Context(), cqID, status, claims.Sub, isSuperAdmin)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, assignments, "")
+}

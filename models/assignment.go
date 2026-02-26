@@ -13,6 +13,7 @@ const (
 	AssignmentStatusPending    AssignmentStatus = "pending"
 	AssignmentStatusInProgress AssignmentStatus = "in_progress"
 	AssignmentStatusCompleted  AssignmentStatus = "completed"
+	AssignmentStatusCancelled  AssignmentStatus = "cancelled"
 )
 
 // UserQuestionnaireAssignment represents a questionnaire assigned to a user with embedded responses
@@ -25,6 +26,10 @@ type UserQuestionnaireAssignment struct {
 	Status                 AssignmentStatus   `bson:"status" json:"status"`
 	StartedAt              *time.Time         `bson:"started_at,omitempty" json:"started_at,omitempty"`
 	CompletedAt            *time.Time         `bson:"completed_at,omitempty" json:"completed_at,omitempty"`
+	CancelledAt            *time.Time         `bson:"cancelled_at,omitempty" json:"cancelled_at,omitempty"`
+	CancelledBy            string             `bson:"cancelled_by,omitempty" json:"cancelled_by,omitempty"`
+	CancelReason           string             `bson:"cancel_reason,omitempty" json:"cancel_reason,omitempty"`
+	DueDate                *time.Time         `bson:"due_date,omitempty" json:"due_date,omitempty"`
 	Responses              []Response         `bson:"responses" json:"responses"`
 }
 

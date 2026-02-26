@@ -32,6 +32,29 @@ func NewAssignmentService(
 	}
 }
 
+// AssignmentProgress holds detailed progress info for a company questionnaire
+type AssignmentProgress struct {
+	CompanyQuestionnaireID string                            `json:"company_questionnaire_id"`
+	Status                 models.CompanyQuestionnaireStatus `json:"status"`
+	TotalAssigned          int                               `json:"total_assigned"`
+	Completed              int                               `json:"completed"`
+	InProgress             int                               `json:"in_progress"`
+	Pending                int                               `json:"pending"`
+	Cancelled              int                               `json:"cancelled"`
+	CompletionRate         float64                           `json:"completion_rate"`
+	Users                  []UserProgressItem                `json:"users"`
+}
+
+// UserProgressItem holds per-user progress
+type UserProgressItem struct {
+	UserID      string                   `json:"user_id"`
+	Status      models.AssignmentStatus  `json:"status"`
+	ProgressPct float64                  `json:"progress_pct"`
+	AssignedAt  string                   `json:"assigned_at"`
+	CompletedAt *string                  `json:"completed_at,omitempty"`
+	StartedAt   *string                  `json:"started_at,omitempty"`
+}
+
 // AssignToUsers assigns a company questionnaire to multiple users
 func (s *AssignmentService) AssignToUsers(
 	ctx context.Context,
@@ -50,8 +73,8 @@ func (s *AssignmentService) AssignToUsers(
 		return nil, fmt.Errorf("company questionnaire not found: %w", err)
 	}
 
-	if !cq.IsActive {
-		return nil, fmt.Errorf("company questionnaire is not active")
+	if cq.Status != models.CQStatusActive {
+		return nil, fmt.Errorf("company questionnaire is not active (current status: %s)", cq.Status)
 	}
 
 	// Verify questionnaire has questions
@@ -273,4 +296,160 @@ func (s *AssignmentService) GetMyCompanyQuestionnaires(ctx context.Context, user
 
 	// Get company questionnaires
 	return s.companyQuestionnaireRepo.GetByCompanyID(ctx, userMeta.CompanyID, true)
+}
+
+// CancelAssignment cancels a specific assignment (supervisor or admin only)
+func (s *AssignmentService) CancelAssignment(ctx context.Context, assignmentID primitive.ObjectID, cancelledBy, reason string, isSuperAdmin bool) error {
+	assignment, err := s.assignmentRepo.GetByID(ctx, assignmentID)
+	if err != nil {
+		return err
+	}
+
+	if assignment.Status == models.AssignmentStatusCompleted {
+		return fmt.Errorf("cannot cancel a completed assignment")
+	}
+	if assignment.Status == models.AssignmentStatusCancelled {
+		return fmt.Errorf("assignment is already cancelled")
+	}
+
+	if !isSuperAdmin {
+		// Verify the canceller belongs to the same company as the assignment
+		cq, err := s.companyQuestionnaireRepo.GetByID(ctx, assignment.CompanyQuestionnaireID)
+		if err != nil {
+			return err
+		}
+		cancellerMeta, err := s.userMetadataRepo.GetByID(ctx, cancelledBy)
+		if err != nil {
+			return fmt.Errorf("canceller metadata not found: %w", err)
+		}
+		if cq.CompanyID != cancellerMeta.CompanyID {
+			return fmt.Errorf("unauthorized: assignment does not belong to your company")
+		}
+	}
+
+	return s.assignmentRepo.CancelAssignment(ctx, assignmentID, cancelledBy, reason)
+}
+
+// CancelAllPendingByCompanyQuestionnaire cancels all non-completed assignments for a CQ
+func (s *AssignmentService) CancelAllPendingByCompanyQuestionnaire(ctx context.Context, cqID primitive.ObjectID, cancelledBy string, reason string, isSuperAdmin bool) (int64, error) {
+	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, cqID)
+	if err != nil {
+		return 0, err
+	}
+
+	if !isSuperAdmin {
+		cancellerMeta, err := s.userMetadataRepo.GetByID(ctx, cancelledBy)
+		if err != nil {
+			return 0, fmt.Errorf("canceller metadata not found: %w", err)
+		}
+		if cq.CompanyID != cancellerMeta.CompanyID {
+			return 0, fmt.Errorf("unauthorized: company questionnaire not in your company")
+		}
+	}
+
+	return s.assignmentRepo.CancelAllPendingByCompanyQuestionnaire(ctx, cqID, cancelledBy, reason)
+}
+
+// GetAssignmentProgress returns detailed progress for a company questionnaire
+func (s *AssignmentService) GetAssignmentProgress(ctx context.Context, cqID primitive.ObjectID, userID string, isSuperAdmin bool) (*AssignmentProgress, error) {
+	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, cqID)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isSuperAdmin {
+		userMeta, err := s.userMetadataRepo.GetByID(ctx, userID)
+		if err != nil {
+			return nil, fmt.Errorf("user metadata not found: %w", err)
+		}
+		if cq.CompanyID != userMeta.CompanyID {
+			return nil, fmt.Errorf("unauthorized: company questionnaire not in your company")
+		}
+	}
+
+	questionnaire, err := s.questionnaireRepo.GetByID(ctx, cq.QuestionnaireID)
+	if err != nil {
+		return nil, err
+	}
+	totalQuestions := len(questionnaire.Questions)
+
+	assignments, err := s.assignmentRepo.GetByCompanyQuestionnaireID(ctx, cqID)
+	if err != nil {
+		return nil, err
+	}
+
+	var completed, inProgress, pending, cancelled int
+	userItems := make([]UserProgressItem, 0, len(assignments))
+
+	for _, a := range assignments {
+		switch a.Status {
+		case models.AssignmentStatusCompleted:
+			completed++
+		case models.AssignmentStatusInProgress:
+			inProgress++
+		case models.AssignmentStatusPending:
+			pending++
+		case models.AssignmentStatusCancelled:
+			cancelled++
+		}
+
+		progressPct := 0.0
+		if totalQuestions > 0 {
+			progressPct = float64(len(a.Responses)) / float64(totalQuestions) * 100
+		}
+
+		item := UserProgressItem{
+			UserID:      a.UserID,
+			Status:      a.Status,
+			ProgressPct: progressPct,
+			AssignedAt:  a.AssignedAt.Format("2006-01-02T15:04:05Z"),
+		}
+		if a.CompletedAt != nil {
+			s := a.CompletedAt.Format("2006-01-02T15:04:05Z")
+			item.CompletedAt = &s
+		}
+		if a.StartedAt != nil {
+			s := a.StartedAt.Format("2006-01-02T15:04:05Z")
+			item.StartedAt = &s
+		}
+		userItems = append(userItems, item)
+	}
+
+	total := len(assignments)
+	rate := 0.0
+	if total > 0 {
+		rate = float64(completed) / float64(total) * 100
+	}
+
+	return &AssignmentProgress{
+		CompanyQuestionnaireID: cqID.Hex(),
+		Status:                 cq.Status,
+		TotalAssigned:          total,
+		Completed:              completed,
+		InProgress:             inProgress,
+		Pending:                pending,
+		Cancelled:              cancelled,
+		CompletionRate:         rate,
+		Users:                  userItems,
+	}, nil
+}
+
+// GetAssignmentsByStatus returns assignments for a CQ filtered by status
+func (s *AssignmentService) GetAssignmentsByStatus(ctx context.Context, cqID primitive.ObjectID, status models.AssignmentStatus, userID string, isSuperAdmin bool) ([]*models.UserQuestionnaireAssignment, error) {
+	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, cqID)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isSuperAdmin {
+		userMeta, err := s.userMetadataRepo.GetByID(ctx, userID)
+		if err != nil {
+			return nil, fmt.Errorf("user metadata not found: %w", err)
+		}
+		if cq.CompanyID != userMeta.CompanyID {
+			return nil, fmt.Errorf("unauthorized: company questionnaire not in your company")
+		}
+	}
+
+	return s.assignmentRepo.GetByCompanyQuestionnaireIDAndStatus(ctx, cqID, status)
 }
