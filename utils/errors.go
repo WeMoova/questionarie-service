@@ -102,6 +102,8 @@ func HandleRepositoryError(w http.ResponseWriter, err error) {
 		Forbidden(w, errMsg)
 	case contains(errMsg, "invalid") || contains(errMsg, "validation"):
 		ValidationError(w, errMsg)
+	case contains(errMsg, "not active") || contains(errMsg, "has no questions") || contains(errMsg, "cannot be empty") || contains(errMsg, "period has expired") || contains(errMsg, "already completed") || contains(errMsg, "already cancelled") || contains(errMsg, "cannot modify") || contains(errMsg, "cannot cancel") || contains(errMsg, "not all required"):
+		ValidationError(w, errMsg)
 	default:
 		InternalServerError(w, "An error occurred while processing your request")
 	}
