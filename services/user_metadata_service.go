@@ -105,9 +105,32 @@ func (s *UserMetadataService) GetUsersBySupervisor(ctx context.Context, supervis
 	return s.userMetadataRepo.GetBySupervisorID(ctx, supervisorID)
 }
 
-// UpdateUserMetadata updates user metadata
+// UpdateUserMetadata updates user metadata, creating it if it doesn't exist (upsert)
 func (s *UserMetadataService) UpdateUserMetadata(ctx context.Context, userID string, companyID primitive.ObjectID, supervisorID, department, documentType, documentNumber, phone, position, employeeCode string) error {
-	// Get existing metadata
+	// Check if metadata exists
+	exists, err := s.userMetadataRepo.Exists(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("failed to check metadata existence: %w", err)
+	}
+
+	if !exists {
+		// Upsert: create if company_id is provided
+		if companyID.IsZero() {
+			return fmt.Errorf("user metadata not found")
+		}
+		newMeta := models.NewUserMetadata(userID, companyID)
+		if department != "" {
+			newMeta.SetDepartment(department)
+		}
+		newMeta.DocumentType = documentType
+		newMeta.DocumentNumber = documentNumber
+		newMeta.Phone = phone
+		newMeta.Position = position
+		newMeta.EmployeeCode = employeeCode
+		return s.userMetadataRepo.Create(ctx, newMeta)
+	}
+
+	// Get existing metadata to update
 	metadata, err := s.userMetadataRepo.GetByID(ctx, userID)
 	if err != nil {
 		return err
