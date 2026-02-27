@@ -439,7 +439,10 @@ func (h *CompanyHandler) UpdateCompanyQuestionnaire(w http.ResponseWriter, r *ht
 		isActive = *req.IsActive
 	}
 
-	if err := h.service.UpdateCompanyQuestionnaire(r.Context(), id, periodStart, periodEnd, isActive); err != nil {
+	claims, _ := middleware.GetUserFromContext(r.Context())
+	isSuperAdmin := middleware.IsSuperAdmin(r.Context())
+
+	if err := h.service.UpdateCompanyQuestionnaire(r.Context(), id, periodStart, periodEnd, isActive, claims.Sub, isSuperAdmin); err != nil {
 		utils.HandleRepositoryError(w, err)
 		return
 	}

@@ -29,7 +29,7 @@ var (
 	jwksCache     jwk.Set
 	jwksCacheMux  sync.RWMutex
 	jwksCacheTime time.Time
-	cacheDuration = 24 * time.Hour
+	cacheDuration = 1 * time.Hour
 )
 
 // JWTAuth middleware validates FusionAuth JWT tokens

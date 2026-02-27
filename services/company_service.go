@@ -216,10 +216,21 @@ func (s *CompanyService) GetActiveCompanyQuestionnaires(ctx context.Context, com
 }
 
 // UpdateCompanyQuestionnaire updates a company questionnaire assignment period
-func (s *CompanyService) UpdateCompanyQuestionnaire(ctx context.Context, id primitive.ObjectID, periodStart, periodEnd time.Time, isActive bool) error {
+func (s *CompanyService) UpdateCompanyQuestionnaire(ctx context.Context, id primitive.ObjectID, periodStart, periodEnd time.Time, isActive bool, userID string, isSuperAdmin bool) error {
 	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, id)
 	if err != nil {
 		return err
+	}
+
+	// Validate company ownership for non-super-admins
+	if !isSuperAdmin {
+		userMeta, err := s.userMetadataRepo.GetByID(ctx, userID)
+		if err != nil {
+			return fmt.Errorf("unauthorized: user metadata not found")
+		}
+		if cq.CompanyID != userMeta.CompanyID {
+			return fmt.Errorf("unauthorized: company questionnaire not in your company")
+		}
 	}
 
 	// Validate period if provided
