@@ -335,11 +335,14 @@ func (r *AssignmentRepository) Delete(ctx context.Context, id primitive.ObjectID
 	return nil
 }
 
-// CheckDuplicate checks if a user already has an assignment for a company questionnaire
+// CheckDuplicate checks if a user already has an active (non-cancelled) assignment
+// for a company questionnaire. Cancelled assignments are not considered duplicates,
+// allowing users to be re-assigned after cancellation.
 func (r *AssignmentRepository) CheckDuplicate(ctx context.Context, userID string, cqID primitive.ObjectID) (bool, error) {
 	count, err := r.collection.CountDocuments(ctx, bson.M{
 		"user_id":                  userID,
 		"company_questionnaire_id": cqID,
+		"status":                   bson.M{"$ne": models.AssignmentStatusCancelled},
 	})
 	if err != nil {
 		return false, fmt.Errorf("failed to check duplicate assignment: %w", err)
