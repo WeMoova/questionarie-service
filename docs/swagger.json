@@ -1,8 +1,8 @@
 {
   "swagger": "2.0",
   "info": {
-    "description": "Sistema completo de gestión de cuestionarios NOM-035 (y otros dominios) para empresas. Soporta múltiples tipos de preguntas, ciclo de vida de cuestionarios por empresa con máquina de estados, asignación jerárquica por roles, reportes agregados y exportación de datos.",
-    "title": "Questionnaire Service API - NOM-035 / Wemoova",
+    "description": "Sistema completo de gestión de cuestionarios para empresas. Soporta múltiples tipos de preguntas, ciclo de vida de cuestionarios por empresa con máquina de estados, asignación jerárquica por roles, reportes agregados y exportación de datos.",
+    "title": "Questionnaire Service API - Wemoova",
     "contact": {
       "name": "Wemoova Technologies",
       "email": "support@wemoova.com"
