@@ -84,6 +84,15 @@ func (s *CompanyService) GetCompanyByID(ctx context.Context, id primitive.Object
 	return s.companyRepo.GetByID(ctx, id)
 }
 
+// GetMyCompany retrieves the company of the authenticated company_admin via their user metadata.
+func (s *CompanyService) GetMyCompany(ctx context.Context, userID string) (*models.Company, error) {
+	userMeta, err := s.userMetadataRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("company not configured for this user: user metadata not found")
+	}
+	return s.companyRepo.GetByID(ctx, userMeta.CompanyID)
+}
+
 // GetAllCompanies retrieves all companies with pagination, enriched with active questionnaire count.
 func (s *CompanyService) GetAllCompanies(ctx context.Context, page, pageSize int64) ([]*models.Company, error) {
 	if page <= 0 {

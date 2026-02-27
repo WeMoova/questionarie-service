@@ -65,6 +65,24 @@ func (h *CompanyHandler) GetCompanies(w http.ResponseWriter, r *http.Request) {
 	utils.RespondWithSuccess(w, http.StatusOK, companies, "")
 }
 
+// GetMyCompany handles GET /api/v1/my-company
+// Returns the company of the authenticated company_admin based on their user metadata.
+func (h *CompanyHandler) GetMyCompany(w http.ResponseWriter, r *http.Request) {
+	claims, err := middleware.GetUserFromContext(r.Context())
+	if err != nil {
+		utils.Unauthorized(w, "unauthorized")
+		return
+	}
+
+	company, err := h.service.GetMyCompany(r.Context(), claims.Sub)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, company, "")
+}
+
 // GetCompanyByID handles GET /api/v1/companies/:id
 func (h *CompanyHandler) GetCompanyByID(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")

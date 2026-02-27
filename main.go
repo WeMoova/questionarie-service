@@ -110,13 +110,19 @@ func main() {
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware.JWTAuth)
 
-			// === Questionnaires (Super Admin only) ===
+			// === Questionnaires READ (Company Admin+) ===
+			r.Group(func(r chi.Router) {
+				r.Use(authMiddleware.RequireCompanyAdmin())
+
+				r.Get("/api/v1/questionnaires", questionnaireHandler.GetQuestionnaires)
+				r.Get("/api/v1/questionnaires/{id}", questionnaireHandler.GetQuestionnaireByID)
+			})
+
+			// === Questionnaires WRITE (Super Admin only) ===
 			r.Group(func(r chi.Router) {
 				r.Use(authMiddleware.RequireSuperAdmin())
 
 				r.Post("/api/v1/questionnaires", questionnaireHandler.CreateQuestionnaire)
-				r.Get("/api/v1/questionnaires", questionnaireHandler.GetQuestionnaires)
-				r.Get("/api/v1/questionnaires/{id}", questionnaireHandler.GetQuestionnaireByID)
 				r.Put("/api/v1/questionnaires/{id}", questionnaireHandler.UpdateQuestionnaire)
 				r.Delete("/api/v1/questionnaires/{id}", questionnaireHandler.DeactivateQuestionnaire)
 
@@ -173,6 +179,13 @@ func main() {
 
 				// Get users by company
 				r.Get("/api/v1/companies/{company_id}/users", userMetadataHandler.GetUsersByCompany)
+			})
+
+			// === My Company (Company Admin+) ===
+			r.Group(func(r chi.Router) {
+				r.Use(authMiddleware.RequireCompanyAdmin())
+
+				r.Get("/api/v1/my-company", companyHandler.GetMyCompany)
 			})
 
 			// === Company Questionnaires (Company Admin+) ===
