@@ -72,6 +72,7 @@ func (r *CompanyRepository) Update(ctx context.Context, id primitive.ObjectID, c
 	update := bson.M{
 		"$set": bson.M{
 			"name":       company.Name,
+			"is_active":  company.IsActive,
 			"updated_at": company.UpdatedAt,
 		},
 	}
