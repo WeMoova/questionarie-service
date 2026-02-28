@@ -147,6 +147,27 @@ func (h *ReportHandler) GetIndividualReport(w http.ResponseWriter, r *http.Reque
 	utils.RespondWithSuccess(w, http.StatusOK, report, "")
 }
 
+// GetEvaluationSummary handles GET /api/v1/reports/company-questionnaire/:cq_id/evaluation-summary
+func (h *ReportHandler) GetEvaluationSummary(w http.ResponseWriter, r *http.Request) {
+	cqIDStr := chi.URLParam(r, "cq_id")
+	cqID, err := utils.ValidateObjectID(cqIDStr)
+	if err != nil {
+		utils.BadRequest(w, err.Error())
+		return
+	}
+
+	claims, _ := middleware.GetUserFromContext(r.Context())
+	isSuperAdmin := middleware.IsSuperAdmin(r.Context())
+
+	summary, err := h.service.GetEvaluationSummary(r.Context(), cqID, claims.Sub, isSuperAdmin)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, summary, "")
+}
+
 // ExportCSV handles GET /api/v1/reports/company-questionnaire/:cq_id/export
 func (h *ReportHandler) ExportCSV(w http.ResponseWriter, r *http.Request) {
 	cqIDStr := chi.URLParam(r, "cq_id")

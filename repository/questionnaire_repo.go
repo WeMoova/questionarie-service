@@ -219,6 +219,79 @@ func (r *QuestionnaireRepository) GetByCategoryID(ctx context.Context, categoryI
 	return questionnaires, nil
 }
 
+// AddSection adds a section to a questionnaire
+func (r *QuestionnaireRepository) AddSection(ctx context.Context, id primitive.ObjectID, section models.Section) error {
+	update := bson.M{
+		"$push": bson.M{"sections": section},
+		"$set":  bson.M{"updated_at": time.Now()},
+	}
+	result, err := r.collection.UpdateOne(ctx, bson.M{"_id": id}, update)
+	if err != nil {
+		return fmt.Errorf("failed to add section: %w", err)
+	}
+	if result.MatchedCount == 0 {
+		return fmt.Errorf("questionnaire not found")
+	}
+	return nil
+}
+
+// UpdateSection updates a section by ID within a questionnaire
+func (r *QuestionnaireRepository) UpdateSection(ctx context.Context, questionnaireID primitive.ObjectID, sectionID string, section models.Section) error {
+	filter := bson.M{
+		"_id":         questionnaireID,
+		"sections.id": sectionID,
+	}
+	update := bson.M{
+		"$set": bson.M{
+			"sections.$":  section,
+			"updated_at": time.Now(),
+		},
+	}
+	result, err := r.collection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return fmt.Errorf("failed to update section: %w", err)
+	}
+	if result.MatchedCount == 0 {
+		return fmt.Errorf("questionnaire or section not found")
+	}
+	return nil
+}
+
+// DeleteSection removes a section from a questionnaire
+func (r *QuestionnaireRepository) DeleteSection(ctx context.Context, questionnaireID primitive.ObjectID, sectionID string) error {
+	filter := bson.M{"_id": questionnaireID}
+	update := bson.M{
+		"$pull": bson.M{"sections": bson.M{"id": sectionID}},
+		"$set":  bson.M{"updated_at": time.Now()},
+	}
+	result, err := r.collection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return fmt.Errorf("failed to delete section: %w", err)
+	}
+	if result.MatchedCount == 0 {
+		return fmt.Errorf("questionnaire not found")
+	}
+	return nil
+}
+
+// SetEvaluationConfig sets or updates the evaluation config of a questionnaire
+func (r *QuestionnaireRepository) SetEvaluationConfig(ctx context.Context, id primitive.ObjectID, config *models.EvaluationConfig) error {
+	update := bson.M{
+		"$set": bson.M{
+			"evaluation_config": config,
+			"updated_at":        time.Now(),
+		},
+	}
+	result, err := r.collection.UpdateOne(ctx, bson.M{"_id": id}, update)
+	if err != nil {
+		return fmt.Errorf("failed to set evaluation config: %w", err)
+	}
+	if result.MatchedCount == 0 {
+		return fmt.Errorf("questionnaire not found")
+	}
+	return nil
+}
+
 // Count returns the total number of questionnaires
 func (r *QuestionnaireRepository) Count(ctx context.Context, activeOnly bool) (int64, error) {
 	filter := bson.M{}

@@ -60,7 +60,8 @@ func main() {
 	companyService := services.NewCompanyService(companyRepo, companyQuestionnaireRepo, questionnaireRepo, assignmentRepo, userMetadataRepo)
 	userMetadataService := services.NewUserMetadataService(userMetadataRepo, companyRepo)
 	gamificationService := services.NewGamificationService(gamificationRepo, userMetadataRepo)
-	assignmentService := services.NewAssignmentService(assignmentRepo, companyQuestionnaireRepo, userMetadataRepo, questionnaireRepo, gamificationService)
+	evaluationService := services.NewEvaluationService(questionnaireRepo, assignmentRepo)
+	assignmentService := services.NewAssignmentService(assignmentRepo, companyQuestionnaireRepo, userMetadataRepo, questionnaireRepo, gamificationService, evaluationService)
 	reportService := services.NewReportService(assignmentRepo, companyQuestionnaireRepo, userMetadataRepo, questionnaireRepo, companyRepo)
 	categoryService := services.NewCategoryService(categoryRepo, questionnaireRepo)
 
@@ -183,6 +184,14 @@ func main() {
 				r.Post("/api/v1/questionnaires/{id}/questions", questionnaireHandler.AddQuestion)
 				r.Put("/api/v1/questionnaires/{id}/questions/{question_id}", questionnaireHandler.UpdateQuestion)
 				r.Delete("/api/v1/questionnaires/{id}/questions/{question_id}", questionnaireHandler.RemoveQuestion)
+
+				// Sections management
+				r.Post("/api/v1/questionnaires/{id}/sections", questionnaireHandler.AddSection)
+				r.Put("/api/v1/questionnaires/{id}/sections/{section_id}", questionnaireHandler.UpdateSection)
+				r.Delete("/api/v1/questionnaires/{id}/sections/{section_id}", questionnaireHandler.DeleteSection)
+
+				// Evaluation configuration
+				r.Put("/api/v1/questionnaires/{id}/evaluation-config", questionnaireHandler.SetEvaluationConfig)
 			})
 
 			// === Companies (Super Admin only) ===
@@ -349,6 +358,7 @@ func main() {
 				r.Use(authMiddleware.RequireCompanyAdmin())
 
 				r.Get("/api/v1/reports/company-questionnaire/{cq_id}/answers", reportHandler.GetAnswerDistribution)
+				r.Get("/api/v1/reports/company-questionnaire/{cq_id}/evaluation-summary", reportHandler.GetEvaluationSummary)
 				r.Get("/api/v1/reports/company/{company_id}/trends", reportHandler.GetTrends)
 				r.Get("/api/v1/reports/company-questionnaire/{cq_id}/export", reportHandler.ExportCSV)
 			})

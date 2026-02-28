@@ -31,6 +31,7 @@ type UserQuestionnaireAssignment struct {
 	CancelReason           string             `bson:"cancel_reason,omitempty" json:"cancel_reason,omitempty"`
 	DueDate                *time.Time         `bson:"due_date,omitempty" json:"due_date,omitempty"`
 	Responses              []Response         `bson:"responses" json:"responses"`
+	EvaluationResult       *EvaluationResult  `bson:"evaluation_result,omitempty" json:"evaluation_result,omitempty"`
 }
 
 // NewUserQuestionnaireAssignment creates a new assignment

@@ -7,19 +7,57 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
+// Section represents a section within a questionnaire (e.g., "Sección A: Desgaste Profesional")
+type Section struct {
+	ID          string `bson:"id" json:"id"`
+	Title       string `bson:"title" json:"title"`
+	Description string `bson:"description,omitempty" json:"description,omitempty"`
+	OrderIndex  int    `bson:"order_index" json:"order_index"`
+}
+
+// ScoreThreshold defines a scoring level (e.g., ALTO: > 27 points)
+type ScoreThreshold struct {
+	Level       string `bson:"level" json:"level"`                                 // "alto", "medio", "bajo"
+	Label       string `bson:"label" json:"label"`                                 // "ALTO", "MEDIO", "BAJO"
+	MinScore    *int   `bson:"min_score,omitempty" json:"min_score,omitempty"`
+	MaxScore    *int   `bson:"max_score,omitempty" json:"max_score,omitempty"`
+	Color       string `bson:"color,omitempty" json:"color,omitempty"`
+	Description string `bson:"description,omitempty" json:"description,omitempty"`
+}
+
+// DimensionConfig defines a scoring dimension (e.g., AE = Agotamiento Emocional)
+type DimensionConfig struct {
+	Code             string           `bson:"code" json:"code"`
+	Name             string           `bson:"name" json:"name"`
+	Description      string           `bson:"description,omitempty" json:"description,omitempty"`
+	ScoringDirection string           `bson:"scoring_direction" json:"scoring_direction"` // "direct" or "inverse"
+	MaxScore         int              `bson:"max_score" json:"max_score"`
+	Thresholds       []ScoreThreshold `bson:"thresholds" json:"thresholds"`
+}
+
+// EvaluationConfig holds the scoring methodology for a questionnaire
+type EvaluationConfig struct {
+	Enabled               bool              `bson:"enabled" json:"enabled"`
+	ScoringMethod         string            `bson:"scoring_method" json:"scoring_method"` // "sum" or "average"
+	Dimensions            []DimensionConfig `bson:"dimensions" json:"dimensions"`
+	GeneralInterpretation string            `bson:"general_interpretation,omitempty" json:"general_interpretation,omitempty"`
+}
+
 // Questionnaire represents a questionnaire with embedded questions
 type Questionnaire struct {
-	ID          primitive.ObjectID  `bson:"_id,omitempty" json:"id,omitempty"`
-	Title       string              `bson:"title" json:"title" validate:"required,min=5,max=200"`
-	Description string              `bson:"description" json:"description"`
-	CoverImage  string              `bson:"cover_image,omitempty" json:"cover_image,omitempty"`
-	CreatedBy   string              `bson:"created_by" json:"created_by"` // FusionAuth user ID
-	IsActive    bool                `bson:"is_active" json:"is_active"`
-	Questions   []Question          `bson:"questions" json:"questions"`
-	Tags        []string            `bson:"tags" json:"tags"`
-	CategoryID  *primitive.ObjectID `bson:"category_id,omitempty" json:"category_id,omitempty"`
-	CreatedAt   time.Time           `bson:"created_at" json:"created_at"`
-	UpdatedAt   time.Time           `bson:"updated_at" json:"updated_at"`
+	ID               primitive.ObjectID  `bson:"_id,omitempty" json:"id,omitempty"`
+	Title            string              `bson:"title" json:"title" validate:"required,min=5,max=200"`
+	Description      string              `bson:"description" json:"description"`
+	CoverImage       string              `bson:"cover_image,omitempty" json:"cover_image,omitempty"`
+	CreatedBy        string              `bson:"created_by" json:"created_by"` // FusionAuth user ID
+	IsActive         bool                `bson:"is_active" json:"is_active"`
+	Questions        []Question          `bson:"questions" json:"questions"`
+	Sections         []Section           `bson:"sections,omitempty" json:"sections,omitempty"`
+	EvaluationConfig *EvaluationConfig   `bson:"evaluation_config,omitempty" json:"evaluation_config,omitempty"`
+	Tags             []string            `bson:"tags" json:"tags"`
+	CategoryID       *primitive.ObjectID `bson:"category_id,omitempty" json:"category_id,omitempty"`
+	CreatedAt        time.Time           `bson:"created_at" json:"created_at"`
+	UpdatedAt        time.Time           `bson:"updated_at" json:"updated_at"`
 }
 
 // CompanyQuestionnaireStatus represents the lifecycle state of a company questionnaire

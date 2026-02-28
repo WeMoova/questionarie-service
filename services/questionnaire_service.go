@@ -188,6 +188,26 @@ func (s *QuestionnaireService) GetQuestionnaireStats(ctx context.Context) (map[s
 	}, nil
 }
 
+// AddSection adds a section to a questionnaire
+func (s *QuestionnaireService) AddSection(ctx context.Context, questionnaireID primitive.ObjectID, section models.Section) error {
+	return s.repo.AddSection(ctx, questionnaireID, section)
+}
+
+// UpdateSection updates a section within a questionnaire
+func (s *QuestionnaireService) UpdateSection(ctx context.Context, questionnaireID primitive.ObjectID, sectionID string, section models.Section) error {
+	return s.repo.UpdateSection(ctx, questionnaireID, sectionID, section)
+}
+
+// DeleteSection removes a section from a questionnaire
+func (s *QuestionnaireService) DeleteSection(ctx context.Context, questionnaireID primitive.ObjectID, sectionID string) error {
+	return s.repo.DeleteSection(ctx, questionnaireID, sectionID)
+}
+
+// SetEvaluationConfig sets the evaluation configuration for a questionnaire
+func (s *QuestionnaireService) SetEvaluationConfig(ctx context.Context, questionnaireID primitive.ObjectID, config *models.EvaluationConfig) error {
+	return s.repo.SetEvaluationConfig(ctx, questionnaireID, config)
+}
+
 // ValidateQuestionnaire validates that a questionnaire is complete and ready to be assigned
 func (s *QuestionnaireService) ValidateQuestionnaire(ctx context.Context, id primitive.ObjectID) error {
 	questionnaire, err := s.repo.GetByID(ctx, id)

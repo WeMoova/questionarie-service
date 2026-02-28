@@ -17,6 +17,7 @@ type AssignmentService struct {
 	userMetadataRepo         *repository.UserMetadataRepository
 	questionnaireRepo        *repository.QuestionnaireRepository
 	gamificationService      *GamificationService
+	evaluationService        *EvaluationService
 }
 
 // NewAssignmentService creates a new AssignmentService
@@ -26,6 +27,7 @@ func NewAssignmentService(
 	userMetadataRepo *repository.UserMetadataRepository,
 	questionnaireRepo *repository.QuestionnaireRepository,
 	gamificationService *GamificationService,
+	evaluationService *EvaluationService,
 ) *AssignmentService {
 	return &AssignmentService{
 		assignmentRepo:           assignmentRepo,
@@ -33,6 +35,7 @@ func NewAssignmentService(
 		userMetadataRepo:         userMetadataRepo,
 		questionnaireRepo:        questionnaireRepo,
 		gamificationService:      gamificationService,
+		evaluationService:        evaluationService,
 	}
 }
 
@@ -270,6 +273,18 @@ func (s *AssignmentService) SubmitAssignment(ctx context.Context, assignmentID p
 	// Mark as completed
 	if err := s.assignmentRepo.UpdateStatus(ctx, assignmentID, models.AssignmentStatusCompleted); err != nil {
 		return err
+	}
+
+	// Evaluate assignment if questionnaire has evaluation config
+	if s.evaluationService != nil {
+		evalResult, err := s.evaluationService.EvaluateAssignment(ctx, assignmentID, questionnaire.ID)
+		if err != nil {
+			log.Printf("evaluation error for assignment %s: %v", assignmentID.Hex(), err)
+		} else if evalResult != nil {
+			if err := s.assignmentRepo.SetEvaluationResult(ctx, assignmentID, evalResult); err != nil {
+				log.Printf("failed to store evaluation result for assignment %s: %v", assignmentID.Hex(), err)
+			}
+		}
 	}
 
 	// Award gamification points (fire-and-forget, don't block submission)

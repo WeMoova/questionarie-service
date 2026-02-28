@@ -335,6 +335,23 @@ func (r *AssignmentRepository) Delete(ctx context.Context, id primitive.ObjectID
 	return nil
 }
 
+// SetEvaluationResult stores the evaluation result on a completed assignment
+func (r *AssignmentRepository) SetEvaluationResult(ctx context.Context, id primitive.ObjectID, result *models.EvaluationResult) error {
+	update := bson.M{
+		"$set": bson.M{
+			"evaluation_result": result,
+		},
+	}
+	res, err := r.collection.UpdateOne(ctx, bson.M{"_id": id}, update)
+	if err != nil {
+		return fmt.Errorf("failed to set evaluation result: %w", err)
+	}
+	if res.MatchedCount == 0 {
+		return fmt.Errorf("assignment not found")
+	}
+	return nil
+}
+
 // CheckDuplicate checks if a user already has an active (non-cancelled) assignment
 // for a company questionnaire. Cancelled assignments are not considered duplicates,
 // allowing users to be re-assigned after cancellation.

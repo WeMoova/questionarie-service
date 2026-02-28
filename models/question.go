@@ -19,10 +19,12 @@ type Question struct {
 	QuestionID   string                 `bson:"question_id" json:"id"`
 	QuestionText string                 `bson:"question_text" json:"question_text" validate:"required,min=5"`
 	QuestionType QuestionType           `bson:"question_type" json:"question_type" validate:"required,oneof=multiple_choice likert_scale free_text yes_no"`
-	ImageURL     string                 `bson:"image_url,omitempty" json:"image_url,omitempty"`
-	Options      map[string]interface{} `bson:"options,omitempty" json:"options,omitempty"`
-	OrderIndex   int                    `bson:"order_index" json:"order_index" validate:"min=0"`
-	IsRequired   bool                   `bson:"is_required" json:"is_required"`
+	ImageURL      string                 `bson:"image_url,omitempty" json:"image_url,omitempty"`
+	Options       map[string]interface{} `bson:"options,omitempty" json:"options,omitempty"`
+	OrderIndex    int                    `bson:"order_index" json:"order_index" validate:"min=0"`
+	IsRequired    bool                   `bson:"is_required" json:"is_required"`
+	SectionID     string                 `bson:"section_id,omitempty" json:"section_id,omitempty"`
+	DimensionCode string                 `bson:"dimension_code,omitempty" json:"dimension_code,omitempty"`
 }
 
 // NewQuestion creates a new Question with a unique ID

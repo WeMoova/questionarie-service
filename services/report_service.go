@@ -549,17 +549,18 @@ func (s *ReportService) GetTrends(ctx context.Context, companyID primitive.Objec
 
 // IndividualReport holds full report for a single employee assignment
 type IndividualReport struct {
-	AssignmentID   string                 `json:"assignment_id"`
-	UserID         string                 `json:"user_id"`
-	Status         models.AssignmentStatus `json:"status"`
-	AssignedAt     string                 `json:"assigned_at"`
-	StartedAt      *string                `json:"started_at,omitempty"`
-	CompletedAt    *string                `json:"completed_at,omitempty"`
-	TimeToComplete *float64               `json:"time_to_complete_minutes,omitempty"`
-	TotalQuestions int                    `json:"total_questions"`
-	AnsweredCount  int                    `json:"answered_count"`
-	ProgressPct    float64                `json:"progress_pct"`
-	Responses      []ResponseDetail       `json:"responses"`
+	AssignmentID     string                    `json:"assignment_id"`
+	UserID           string                    `json:"user_id"`
+	Status           models.AssignmentStatus   `json:"status"`
+	AssignedAt       string                    `json:"assigned_at"`
+	StartedAt        *string                   `json:"started_at,omitempty"`
+	CompletedAt      *string                   `json:"completed_at,omitempty"`
+	TimeToComplete   *float64                  `json:"time_to_complete_minutes,omitempty"`
+	TotalQuestions   int                       `json:"total_questions"`
+	AnsweredCount    int                       `json:"answered_count"`
+	ProgressPct      float64                   `json:"progress_pct"`
+	Responses        []ResponseDetail          `json:"responses"`
+	EvaluationResult *models.EvaluationResult  `json:"evaluation_result,omitempty"`
 }
 
 // ResponseDetail enriches a response with the question text
@@ -625,14 +626,15 @@ func (s *ReportService) GetIndividualReport(ctx context.Context, assignmentID pr
 	}
 
 	report := &IndividualReport{
-		AssignmentID:   assignment.ID.Hex(),
-		UserID:         assignment.UserID,
-		Status:         assignment.Status,
-		AssignedAt:     assignment.AssignedAt.Format("2006-01-02T15:04:05Z"),
-		TotalQuestions: totalQ,
-		AnsweredCount:  len(assignment.Responses),
-		ProgressPct:    progressPct,
-		Responses:      details,
+		AssignmentID:     assignment.ID.Hex(),
+		UserID:           assignment.UserID,
+		Status:           assignment.Status,
+		AssignedAt:       assignment.AssignedAt.Format("2006-01-02T15:04:05Z"),
+		TotalQuestions:   totalQ,
+		AnsweredCount:    len(assignment.Responses),
+		ProgressPct:      progressPct,
+		Responses:        details,
+		EvaluationResult: assignment.EvaluationResult,
 	}
 
 	if assignment.StartedAt != nil {
@@ -649,6 +651,128 @@ func (s *ReportService) GetIndividualReport(ctx context.Context, assignmentID pr
 	}
 
 	return report, nil
+}
+
+// EvaluationSummary holds aggregated evaluation scores for a company questionnaire
+type EvaluationSummary struct {
+	CompanyQuestionnaireID string                      `json:"company_questionnaire_id"`
+	QuestionnaireTitle     string                      `json:"questionnaire_title"`
+	TotalEvaluated         int                         `json:"total_evaluated"`
+	DimensionAverages      []DimensionAverageStat      `json:"dimension_averages"`
+	GeneralInterpretation  string                      `json:"general_interpretation,omitempty"`
+}
+
+// DimensionAverageStat holds average scores for a single dimension
+type DimensionAverageStat struct {
+	DimensionCode string             `json:"dimension_code"`
+	DimensionName string             `json:"dimension_name"`
+	AvgScore      float64            `json:"avg_score"`
+	MaxScore      int                `json:"max_score"`
+	Direction     string             `json:"direction"`
+	LevelDistribution map[string]int `json:"level_distribution"`
+}
+
+// GetEvaluationSummary returns aggregated evaluation scores for a company questionnaire
+func (s *ReportService) GetEvaluationSummary(ctx context.Context, cqID primitive.ObjectID, userID string, isSuperAdmin bool) (*EvaluationSummary, error) {
+	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, cqID)
+	if err != nil {
+		return nil, fmt.Errorf("company questionnaire not found: %w", err)
+	}
+
+	if !isSuperAdmin {
+		userMeta, err := s.userMetadataRepo.GetByID(ctx, userID)
+		if err != nil {
+			return nil, fmt.Errorf("user metadata not found: %w", err)
+		}
+		if cq.CompanyID != userMeta.CompanyID {
+			return nil, fmt.Errorf("unauthorized: cannot access reports from other companies")
+		}
+	}
+
+	questionnaire, err := s.questionnaireRepo.GetByID(ctx, cq.QuestionnaireID)
+	if err != nil {
+		return nil, fmt.Errorf("questionnaire not found: %w", err)
+	}
+
+	assignments, err := s.assignmentRepo.GetByCompanyQuestionnaireIDAndStatus(ctx, cqID, models.AssignmentStatusCompleted)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get completed assignments: %w", err)
+	}
+
+	// Collect all evaluation results
+	var evaluatedAssignments []*models.UserQuestionnaireAssignment
+	for _, a := range assignments {
+		if a.EvaluationResult != nil && len(a.EvaluationResult.DimensionScores) > 0 {
+			evaluatedAssignments = append(evaluatedAssignments, a)
+		}
+	}
+
+	if len(evaluatedAssignments) == 0 {
+		return &EvaluationSummary{
+			CompanyQuestionnaireID: cqID.Hex(),
+			QuestionnaireTitle:     questionnaire.Title,
+			TotalEvaluated:         0,
+			DimensionAverages:      []DimensionAverageStat{},
+		}, nil
+	}
+
+	// Aggregate scores per dimension
+	type dimAccum struct {
+		name      string
+		maxScore  int
+		direction string
+		sumScore  float64
+		count     int
+		levels    map[string]int
+	}
+	dimMap := make(map[string]*dimAccum)
+
+	for _, a := range evaluatedAssignments {
+		for _, ds := range a.EvaluationResult.DimensionScores {
+			acc, ok := dimMap[ds.DimensionCode]
+			if !ok {
+				acc = &dimAccum{
+					name:      ds.DimensionName,
+					maxScore:  ds.MaxScore,
+					direction: ds.Direction,
+					levels:    make(map[string]int),
+				}
+				dimMap[ds.DimensionCode] = acc
+			}
+			acc.sumScore += ds.RawScore
+			acc.count++
+			acc.levels[ds.Level]++
+		}
+	}
+
+	dimAverages := make([]DimensionAverageStat, 0, len(dimMap))
+	for code, acc := range dimMap {
+		avg := 0.0
+		if acc.count > 0 {
+			avg = acc.sumScore / float64(acc.count)
+		}
+		dimAverages = append(dimAverages, DimensionAverageStat{
+			DimensionCode:     code,
+			DimensionName:     acc.name,
+			AvgScore:          avg,
+			MaxScore:          acc.maxScore,
+			Direction:         acc.direction,
+			LevelDistribution: acc.levels,
+		})
+	}
+
+	interpretation := ""
+	if questionnaire.EvaluationConfig != nil {
+		interpretation = questionnaire.EvaluationConfig.GeneralInterpretation
+	}
+
+	return &EvaluationSummary{
+		CompanyQuestionnaireID: cqID.Hex(),
+		QuestionnaireTitle:     questionnaire.Title,
+		TotalEvaluated:         len(evaluatedAssignments),
+		DimensionAverages:      dimAverages,
+		GeneralInterpretation:  interpretation,
+	}, nil
 }
 
 // ExportCSV generates an anonymized CSV of all completed responses for a company questionnaire
