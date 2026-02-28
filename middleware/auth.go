@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -74,7 +75,12 @@ func validateToken(tokenString string) (*JWTClaims, error) {
 		parserOpts = append(parserOpts, jwt.WithAudience(aud))
 	}
 	if iss := os.Getenv("FUSIONAUTH_URL"); iss != "" {
-		parserOpts = append(parserOpts, jwt.WithIssuer(iss))
+		// FusionAuth emits tokens with issuer as hostname only (e.g. "auth.wemoova.com")
+		if parsed, err := url.Parse(iss); err == nil && parsed.Host != "" {
+			parserOpts = append(parserOpts, jwt.WithIssuer(parsed.Host))
+		} else {
+			parserOpts = append(parserOpts, jwt.WithIssuer(iss))
+		}
 	}
 
 	token, err := jwt.ParseWithClaims(tokenString, &JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
