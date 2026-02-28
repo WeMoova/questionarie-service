@@ -208,6 +208,49 @@ func (s *QuestionnaireService) SetEvaluationConfig(ctx context.Context, question
 	return s.repo.SetEvaluationConfig(ctx, questionnaireID, config)
 }
 
+// ImportQuestionnaire creates a complete questionnaire with sections, questions, and evaluation config in one call
+func (s *QuestionnaireService) ImportQuestionnaire(ctx context.Context, title, description, createdBy string, tags []string, categoryID *primitive.ObjectID, coverImage string, sections []models.Section, questions []models.Question, evaluationConfig *models.EvaluationConfig) (*models.Questionnaire, error) {
+	if title == "" {
+		return nil, fmt.Errorf("title is required")
+	}
+	if len(title) < 5 {
+		return nil, fmt.Errorf("title must be at least 5 characters")
+	}
+
+	questionnaire := models.NewQuestionnaire(title, description, createdBy)
+	questionnaire.CoverImage = coverImage
+	if tags != nil {
+		questionnaire.Tags = tags
+	}
+	if categoryID != nil {
+		questionnaire.CategoryID = categoryID
+	}
+	if sections != nil {
+		questionnaire.Sections = sections
+	}
+	if evaluationConfig != nil {
+		questionnaire.EvaluationConfig = evaluationConfig
+	}
+
+	// Assign UUIDs to questions that don't have IDs
+	for i := range questions {
+		if questions[i].QuestionID == "" {
+			q := models.NewQuestion(questions[i].QuestionText, questions[i].QuestionType, questions[i].OrderIndex, questions[i].IsRequired)
+			questions[i].QuestionID = q.QuestionID
+		}
+		if questions[i].Options == nil {
+			questions[i].Options = make(map[string]interface{})
+		}
+	}
+	questionnaire.Questions = questions
+
+	if err := s.repo.Create(ctx, questionnaire); err != nil {
+		return nil, fmt.Errorf("failed to import questionnaire: %w", err)
+	}
+
+	return questionnaire, nil
+}
+
 // ValidateQuestionnaire validates that a questionnaire is complete and ready to be assigned
 func (s *QuestionnaireService) ValidateQuestionnaire(ctx context.Context, id primitive.ObjectID) error {
 	questionnaire, err := s.repo.GetByID(ctx, id)

@@ -1,13 +1,13 @@
 {
   "swagger": "2.0",
   "info": {
-    "description": "Sistema completo de gestión de cuestionarios para empresas. Soporta múltiples tipos de preguntas, ciclo de vida de cuestionarios por empresa con máquina de estados, asignación jerárquica por roles, reportes agregados y exportación de datos.",
+    "description": "Sistema completo de gestión de cuestionarios para empresas. Soporta múltiples tipos de preguntas, secciones, dimensiones con evaluación automática (scoring por dimensión con umbrales), ciclo de vida de cuestionarios por empresa con máquina de estados, asignación jerárquica por roles, gamificación, reportes agregados y exportación de datos.",
     "title": "Questionnaire Service API - Wemoova",
     "contact": {
       "name": "Wemoova Technologies",
       "email": "support@wemoova.com"
     },
-    "version": "1.1"
+    "version": "2.0"
   },
   "host": "qa.services.wemoova.com",
   "basePath": "/questionarie-service",
@@ -51,6 +51,132 @@
           },
           "503": {
             "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/questionnaires/import": {
+      "post": {
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "description": "Creates a complete questionnaire with sections, questions (with section_id and dimension_code), and evaluation config in a single request. Designed for bulk import from external sources (PDFs, spreadsheets).",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "tags": ["Questionnaires"],
+        "summary": "Import complete questionnaire",
+        "parameters": [
+          {
+            "description": "Complete questionnaire data",
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "required": ["title"],
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "minLength": 5,
+                  "example": "Inventario de Desgaste Profesional"
+                },
+                "description": {
+                  "type": "string",
+                  "example": "Cuestionario adaptado para evaluar el desgaste profesional en contextos de teletrabajo"
+                },
+                "cover_image": {
+                  "type": "string"
+                },
+                "tags": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "example": ["burnout", "teletrabajo", "bienestar"]
+                },
+                "category_id": {
+                  "type": "string",
+                  "description": "ObjectID of an existing category (optional)"
+                },
+                "sections": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": { "type": "string", "example": "seccion-a" },
+                      "title": { "type": "string", "example": "Sección A: Desgaste Profesional General" },
+                      "description": { "type": "string" },
+                      "order_index": { "type": "integer", "example": 0 }
+                    }
+                  }
+                },
+                "questions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["question_text", "question_type"],
+                    "properties": {
+                      "question_text": { "type": "string", "example": "Me siento emocionalmente agotado/a por mi trabajo" },
+                      "question_type": { "type": "string", "enum": ["multiple_choice", "likert_scale", "free_text", "yes_no"], "example": "likert_scale" },
+                      "options": {
+                        "type": "object",
+                        "example": { "min": 0, "max": 6, "labels": ["Nunca", "Pocas veces al año", "Una vez al mes", "Pocas veces al mes", "Una vez a la semana", "Pocas veces a la semana", "A diario"] }
+                      },
+                      "order_index": { "type": "integer", "example": 0 },
+                      "is_required": { "type": "boolean", "example": true },
+                      "section_id": { "type": "string", "example": "seccion-a" },
+                      "dimension_code": { "type": "string", "example": "AE" }
+                    }
+                  }
+                },
+                "evaluation_config": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": { "type": "boolean", "example": true },
+                    "scoring_method": { "type": "string", "enum": ["sum", "average"], "example": "sum" },
+                    "dimensions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": { "type": "string", "example": "AE" },
+                          "name": { "type": "string", "example": "Agotamiento Emocional" },
+                          "description": { "type": "string" },
+                          "scoring_direction": { "type": "string", "enum": ["direct", "inverse"], "example": "direct" },
+                          "max_score": { "type": "integer", "example": 54 },
+                          "thresholds": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "level": { "type": "string", "example": "alto" },
+                                "label": { "type": "string", "example": "ALTO" },
+                                "min_score": { "type": "integer", "example": 27 },
+                                "max_score": { "type": "integer" },
+                                "color": { "type": "string", "example": "#ef4444" },
+                                "description": { "type": "string" }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "general_interpretation": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Questionnaire imported successfully"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
           }
         }
       }

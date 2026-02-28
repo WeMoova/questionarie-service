@@ -403,6 +403,57 @@ func (h *QuestionnaireHandler) DeleteSection(w http.ResponseWriter, r *http.Requ
 	utils.RespondWithSuccess(w, http.StatusOK, nil, "Section deleted successfully")
 }
 
+// ImportQuestionnaire handles POST /api/v1/questionnaires/import
+// Creates a complete questionnaire with sections, questions, and evaluation config in one call
+func (h *QuestionnaireHandler) ImportQuestionnaire(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Title            string                  `json:"title"`
+		Description      string                  `json:"description"`
+		CoverImage       string                  `json:"cover_image"`
+		Tags             []string                `json:"tags"`
+		CategoryID       string                  `json:"category_id"`
+		Sections         []models.Section        `json:"sections"`
+		Questions        []models.Question       `json:"questions"`
+		EvaluationConfig *models.EvaluationConfig `json:"evaluation_config"`
+	}
+
+	if err := utils.ParseRequestBody(r, &req); err != nil {
+		utils.BadRequest(w, err.Error())
+		return
+	}
+
+	var categoryID *primitive.ObjectID
+	if req.CategoryID != "" {
+		id, err := utils.ValidateObjectID(req.CategoryID)
+		if err != nil {
+			utils.BadRequest(w, "invalid category_id: "+err.Error())
+			return
+		}
+		categoryID = &id
+	}
+
+	claims, _ := middleware.GetUserFromContext(r.Context())
+
+	questionnaire, err := h.service.ImportQuestionnaire(
+		r.Context(),
+		req.Title,
+		req.Description,
+		claims.Sub,
+		req.Tags,
+		categoryID,
+		req.CoverImage,
+		req.Sections,
+		req.Questions,
+		req.EvaluationConfig,
+	)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusCreated, questionnaire, "Questionnaire imported successfully")
+}
+
 // SetEvaluationConfig handles PUT /api/v1/questionnaires/:id/evaluation-config
 func (h *QuestionnaireHandler) SetEvaluationConfig(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")

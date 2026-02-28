@@ -119,7 +119,7 @@ func main() {
 	// Request body size limit middleware (1MB for regular requests, skip for image uploads)
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !strings.Contains(r.URL.Path, "/images/upload") {
+			if !strings.Contains(r.URL.Path, "/images/upload") && !strings.Contains(r.URL.Path, "/questionnaires/import") {
 				r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB
 			}
 			next.ServeHTTP(w, r)
@@ -176,6 +176,7 @@ func main() {
 			r.Group(func(r chi.Router) {
 				r.Use(authMiddleware.RequireSuperAdmin())
 
+				r.Post("/api/v1/questionnaires/import", questionnaireHandler.ImportQuestionnaire)
 				r.Post("/api/v1/questionnaires", questionnaireHandler.CreateQuestionnaire)
 				r.Put("/api/v1/questionnaires/{id}", questionnaireHandler.UpdateQuestionnaire)
 				r.Delete("/api/v1/questionnaires/{id}", questionnaireHandler.DeactivateQuestionnaire)
