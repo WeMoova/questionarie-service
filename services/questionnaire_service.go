@@ -22,7 +22,7 @@ func NewQuestionnaireService(repo *repository.QuestionnaireRepository) *Question
 }
 
 // CreateQuestionnaire creates a new questionnaire (Super Admin only)
-func (s *QuestionnaireService) CreateQuestionnaire(ctx context.Context, title, description, createdBy string, tags []string, categoryID *primitive.ObjectID) (*models.Questionnaire, error) {
+func (s *QuestionnaireService) CreateQuestionnaire(ctx context.Context, title, description, createdBy string, tags []string, categoryID *primitive.ObjectID, coverImage string) (*models.Questionnaire, error) {
 	if title == "" {
 		return nil, fmt.Errorf("title is required")
 	}
@@ -31,6 +31,7 @@ func (s *QuestionnaireService) CreateQuestionnaire(ctx context.Context, title, d
 	}
 
 	questionnaire := models.NewQuestionnaire(title, description, createdBy)
+	questionnaire.CoverImage = coverImage
 	if tags != nil {
 		questionnaire.Tags = tags
 	}
@@ -71,7 +72,7 @@ func (s *QuestionnaireService) GetQuestionnairesByCreator(ctx context.Context, c
 }
 
 // UpdateQuestionnaire updates a questionnaire
-func (s *QuestionnaireService) UpdateQuestionnaire(ctx context.Context, id primitive.ObjectID, title, description string, isActive bool, tags []string, categoryID *primitive.ObjectID) error {
+func (s *QuestionnaireService) UpdateQuestionnaire(ctx context.Context, id primitive.ObjectID, title, description string, isActive bool, tags []string, categoryID *primitive.ObjectID, coverImage *string) error {
 	questionnaire, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		return err
@@ -82,6 +83,9 @@ func (s *QuestionnaireService) UpdateQuestionnaire(ctx context.Context, id primi
 	}
 	if description != "" {
 		questionnaire.Description = description
+	}
+	if coverImage != nil {
+		questionnaire.CoverImage = *coverImage
 	}
 	questionnaire.IsActive = isActive
 	if tags != nil {

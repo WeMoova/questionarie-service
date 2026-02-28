@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	authMiddleware "questionarie-service/middleware"
 	"questionarie-service/repository"
 	"questionarie-service/services"
+	"questionarie-service/storage"
 )
 
 func main() {
@@ -32,6 +34,13 @@ func main() {
 	}
 	defer mongodb.Close(context.Background())
 
+	// Initialize MinIO storage (optional — graceful if not configured)
+	var minioStorage *storage.MinIOStorage
+	minioStorage, err = storage.NewMinIOStorage()
+	if err != nil {
+		log.Printf("WARNING: MinIO not configured, image upload disabled: %v", err)
+	}
+
 	// Initialize repositories
 	companyRepo := repository.NewCompanyRepository(mongodb.Database)
 	questionnaireRepo := repository.NewQuestionnaireRepository(mongodb.Database)
@@ -39,12 +48,19 @@ func main() {
 	assignmentRepo := repository.NewAssignmentRepository(mongodb.Database)
 	userMetadataRepo := repository.NewUserMetadataRepository(mongodb.Database)
 	categoryRepo := repository.NewCategoryRepository(mongodb.Database)
+	gamificationRepo := repository.NewGamificationRepository(mongodb.Database)
+
+	// Seed default gamification data
+	if err := gamificationRepo.SeedDefaultData(context.Background()); err != nil {
+		log.Printf("WARNING: Failed to seed gamification defaults: %v", err)
+	}
 
 	// Initialize services
 	questionnaireService := services.NewQuestionnaireService(questionnaireRepo)
 	companyService := services.NewCompanyService(companyRepo, companyQuestionnaireRepo, questionnaireRepo, assignmentRepo, userMetadataRepo)
 	userMetadataService := services.NewUserMetadataService(userMetadataRepo, companyRepo)
-	assignmentService := services.NewAssignmentService(assignmentRepo, companyQuestionnaireRepo, userMetadataRepo, questionnaireRepo)
+	gamificationService := services.NewGamificationService(gamificationRepo, userMetadataRepo)
+	assignmentService := services.NewAssignmentService(assignmentRepo, companyQuestionnaireRepo, userMetadataRepo, questionnaireRepo, gamificationService)
 	reportService := services.NewReportService(assignmentRepo, companyQuestionnaireRepo, userMetadataRepo, questionnaireRepo, companyRepo)
 	categoryService := services.NewCategoryService(categoryRepo, questionnaireRepo)
 
@@ -56,6 +72,12 @@ func main() {
 	responseHandler := handlers.NewResponseHandler(assignmentService)
 	reportHandler := handlers.NewReportHandler(reportService)
 	categoryHandler := handlers.NewCategoryHandler(categoryService)
+	gamificationHandler := handlers.NewGamificationHandler(gamificationService)
+
+	var imageHandler *handlers.ImageHandler
+	if minioStorage != nil {
+		imageHandler = handlers.NewImageHandler(minioStorage)
+	}
 
 	// Create router
 	r := chi.NewRouter()
@@ -93,10 +115,12 @@ func main() {
 		})
 	})
 
-	// Request body size limit middleware (1MB)
+	// Request body size limit middleware (1MB for regular requests, skip for image uploads)
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB
+			if !strings.Contains(r.URL.Path, "/images/upload") {
+				r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB
+			}
 			next.ServeHTTP(w, r)
 		})
 	})
@@ -127,6 +151,17 @@ func main() {
 		// Protected routes with JWT authentication
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware.JWTAuth)
+
+			// === Image Upload (Super Admin only) ===
+			if imageHandler != nil {
+				r.Group(func(r chi.Router) {
+					r.Use(authMiddleware.RequireSuperAdmin())
+					r.Post("/api/v1/images/upload", imageHandler.UploadImage)
+					r.Delete("/api/v1/images", imageHandler.DeleteImage)
+				})
+				// Image serving (any authenticated user)
+				r.Get("/api/v1/images/*", imageHandler.GetImage)
+			}
 
 			// === Questionnaires READ (Company Admin+) ===
 			r.Group(func(r chi.Router) {
@@ -173,6 +208,38 @@ func main() {
 				r.Get("/api/v1/questionnaire-categories/{id}", categoryHandler.GetCategoryByID)
 				r.Put("/api/v1/questionnaire-categories/{id}", categoryHandler.UpdateCategory)
 				r.Get("/api/v1/questionnaire-categories/{id}/questionnaires", categoryHandler.GetCategoryQuestionnaires)
+			})
+
+			// === Gamification Admin CRUD (Super Admin only) ===
+			r.Group(func(r chi.Router) {
+				r.Use(authMiddleware.RequireSuperAdmin())
+
+				r.Post("/api/v1/gamification/badges", gamificationHandler.CreateBadge)
+				r.Get("/api/v1/gamification/badges", gamificationHandler.GetBadges)
+				r.Put("/api/v1/gamification/badges/{id}", gamificationHandler.UpdateBadge)
+
+				r.Post("/api/v1/gamification/achievements", gamificationHandler.CreateAchievement)
+				r.Get("/api/v1/gamification/achievements", gamificationHandler.GetAchievements)
+				r.Put("/api/v1/gamification/achievements/{id}", gamificationHandler.UpdateAchievement)
+
+				r.Get("/api/v1/gamification/point-rules", gamificationHandler.GetPointRules)
+				r.Put("/api/v1/gamification/point-rules/{id}", gamificationHandler.UpdatePointRule)
+			})
+
+			// === Gamification User (Employee+) ===
+			r.Group(func(r chi.Router) {
+				r.Use(authMiddleware.RequireEmployee())
+
+				r.Get("/api/v1/gamification/my-profile", gamificationHandler.GetMyProfile)
+				r.Get("/api/v1/gamification/leaderboard", gamificationHandler.GetLeaderboard)
+			})
+
+			// === Gamification Admin Views (Company Admin+) ===
+			r.Group(func(r chi.Router) {
+				r.Use(authMiddleware.RequireCompanyAdmin())
+
+				r.Get("/api/v1/gamification/company/{company_id}/leaderboard", gamificationHandler.GetCompanyLeaderboard)
+				r.Get("/api/v1/gamification/users/{user_id}/profile", gamificationHandler.GetUserProfile)
 			})
 
 			// === User Metadata - Get My Metadata (All authenticated users) ===

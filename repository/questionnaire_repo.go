@@ -96,6 +96,7 @@ func (r *QuestionnaireRepository) Update(ctx context.Context, id primitive.Objec
 		"$set": bson.M{
 			"title":       questionnaire.Title,
 			"description": questionnaire.Description,
+			"cover_image": questionnaire.CoverImage,
 			"is_active":   questionnaire.IsActive,
 			"questions":   questionnaire.Questions,
 			"tags":        questionnaire.Tags,

@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"log"
 	"questionarie-service/models"
 	"questionarie-service/repository"
 
@@ -15,6 +16,7 @@ type AssignmentService struct {
 	companyQuestionnaireRepo *repository.CompanyQuestionnaireRepository
 	userMetadataRepo         *repository.UserMetadataRepository
 	questionnaireRepo        *repository.QuestionnaireRepository
+	gamificationService      *GamificationService
 }
 
 // NewAssignmentService creates a new AssignmentService
@@ -23,12 +25,14 @@ func NewAssignmentService(
 	companyQuestionnaireRepo *repository.CompanyQuestionnaireRepository,
 	userMetadataRepo *repository.UserMetadataRepository,
 	questionnaireRepo *repository.QuestionnaireRepository,
+	gamificationService *GamificationService,
 ) *AssignmentService {
 	return &AssignmentService{
 		assignmentRepo:           assignmentRepo,
 		companyQuestionnaireRepo: companyQuestionnaireRepo,
 		userMetadataRepo:         userMetadataRepo,
 		questionnaireRepo:        questionnaireRepo,
+		gamificationService:      gamificationService,
 	}
 }
 
@@ -264,7 +268,23 @@ func (s *AssignmentService) SubmitAssignment(ctx context.Context, assignmentID p
 	}
 
 	// Mark as completed
-	return s.assignmentRepo.UpdateStatus(ctx, assignmentID, models.AssignmentStatusCompleted)
+	if err := s.assignmentRepo.UpdateStatus(ctx, assignmentID, models.AssignmentStatusCompleted); err != nil {
+		return err
+	}
+
+	// Award gamification points (fire-and-forget, don't block submission)
+	if s.gamificationService != nil {
+		go func() {
+			bgCtx := context.Background()
+			s.gamificationService.AwardPointsForCompletion(bgCtx, userID, assignmentID.Hex())
+			s.gamificationService.UpdateStreak(bgCtx, userID)
+			s.gamificationService.CheckAndAwardBadges(bgCtx, userID)
+			s.gamificationService.CheckAndAwardAchievements(bgCtx, userID)
+			log.Printf("gamification: awarded points for user %s assignment %s", userID, assignmentID.Hex())
+		}()
+	}
+
+	return nil
 }
 
 // DeleteAssignment deletes an assignment

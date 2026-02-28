@@ -29,6 +29,7 @@ func (h *QuestionnaireHandler) CreateQuestionnaire(w http.ResponseWriter, r *htt
 	var req struct {
 		Title       string   `json:"title"`
 		Description string   `json:"description"`
+		CoverImage  string   `json:"cover_image"`
 		Tags        []string `json:"tags"`
 		CategoryID  string   `json:"category_id"`
 	}
@@ -49,7 +50,7 @@ func (h *QuestionnaireHandler) CreateQuestionnaire(w http.ResponseWriter, r *htt
 	}
 
 	claims, _ := middleware.GetUserFromContext(r.Context())
-	questionnaire, err := h.service.CreateQuestionnaire(r.Context(), req.Title, req.Description, claims.Sub, req.Tags, categoryID)
+	questionnaire, err := h.service.CreateQuestionnaire(r.Context(), req.Title, req.Description, claims.Sub, req.Tags, categoryID, req.CoverImage)
 	if err != nil {
 		utils.HandleRepositoryError(w, err)
 		return
@@ -103,6 +104,7 @@ func (h *QuestionnaireHandler) UpdateQuestionnaire(w http.ResponseWriter, r *htt
 	var req struct {
 		Title       string   `json:"title"`
 		Description string   `json:"description"`
+		CoverImage  *string  `json:"cover_image"`
 		IsActive    *bool    `json:"is_active"`
 		Tags        []string `json:"tags"`
 		CategoryID  string   `json:"category_id"`
@@ -128,7 +130,7 @@ func (h *QuestionnaireHandler) UpdateQuestionnaire(w http.ResponseWriter, r *htt
 		categoryID = &cid
 	}
 
-	if err := h.service.UpdateQuestionnaire(r.Context(), id, req.Title, req.Description, isActive, req.Tags, categoryID); err != nil {
+	if err := h.service.UpdateQuestionnaire(r.Context(), id, req.Title, req.Description, isActive, req.Tags, categoryID, req.CoverImage); err != nil {
 		utils.HandleRepositoryError(w, err)
 		return
 	}
@@ -183,6 +185,7 @@ func (h *QuestionnaireHandler) AddQuestion(w http.ResponseWriter, r *http.Reques
 	var req struct {
 		QuestionText string                 `json:"question_text"`
 		QuestionType string                 `json:"question_type"`
+		ImageURL     string                 `json:"image_url"`
 		Options      map[string]interface{} `json:"options"`
 		OrderIndex   int                    `json:"order_index"`
 		IsRequired   bool                   `json:"is_required"`
@@ -204,6 +207,7 @@ func (h *QuestionnaireHandler) AddQuestion(w http.ResponseWriter, r *http.Reques
 		req.OrderIndex,
 		req.IsRequired,
 	)
+	question.ImageURL = req.ImageURL
 
 	if req.Options != nil {
 		question.Options = req.Options
@@ -235,6 +239,7 @@ func (h *QuestionnaireHandler) UpdateQuestion(w http.ResponseWriter, r *http.Req
 	var req struct {
 		QuestionText string                 `json:"question_text"`
 		QuestionType string                 `json:"question_type"`
+		ImageURL     string                 `json:"image_url"`
 		Options      map[string]interface{} `json:"options"`
 		OrderIndex   int                    `json:"order_index"`
 		IsRequired   bool                   `json:"is_required"`
@@ -249,6 +254,7 @@ func (h *QuestionnaireHandler) UpdateQuestion(w http.ResponseWriter, r *http.Req
 		QuestionID:   questionID,
 		QuestionText: req.QuestionText,
 		QuestionType: models.QuestionType(req.QuestionType),
+		ImageURL:     req.ImageURL,
 		Options:      req.Options,
 		OrderIndex:   req.OrderIndex,
 		IsRequired:   req.IsRequired,

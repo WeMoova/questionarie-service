@@ -12,6 +12,7 @@ type Questionnaire struct {
 	ID          primitive.ObjectID  `bson:"_id,omitempty" json:"id,omitempty"`
 	Title       string              `bson:"title" json:"title" validate:"required,min=5,max=200"`
 	Description string              `bson:"description" json:"description"`
+	CoverImage  string              `bson:"cover_image,omitempty" json:"cover_image,omitempty"`
 	CreatedBy   string              `bson:"created_by" json:"created_by"` // FusionAuth user ID
 	IsActive    bool                `bson:"is_active" json:"is_active"`
 	Questions   []Question          `bson:"questions" json:"questions"`
