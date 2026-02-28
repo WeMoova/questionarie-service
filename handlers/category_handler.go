@@ -100,6 +100,23 @@ func (h *CategoryHandler) UpdateCategory(w http.ResponseWriter, r *http.Request)
 	utils.RespondWithSuccess(w, http.StatusOK, nil, "Category updated successfully")
 }
 
+// DeleteCategory handles DELETE /api/v1/questionnaire-categories/:id
+func (h *CategoryHandler) DeleteCategory(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := utils.ValidateObjectID(idStr)
+	if err != nil {
+		utils.BadRequest(w, err.Error())
+		return
+	}
+
+	if err := h.service.DeleteCategory(r.Context(), id); err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, nil, "Category deleted successfully")
+}
+
 // GetCategoryQuestionnaires handles GET /api/v1/questionnaire-categories/:id/questionnaires
 func (h *CategoryHandler) GetCategoryQuestionnaires(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")

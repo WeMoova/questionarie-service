@@ -68,6 +68,11 @@ func (s *CategoryService) UpdateCategory(ctx context.Context, id primitive.Objec
 	return s.categoryRepo.Update(ctx, id, category)
 }
 
+// DeleteCategory permanently removes a category
+func (s *CategoryService) DeleteCategory(ctx context.Context, id primitive.ObjectID) error {
+	return s.categoryRepo.Delete(ctx, id)
+}
+
 // GetQuestionnairesByCategory retrieves all questionnaires for a category
 func (s *CategoryService) GetQuestionnairesByCategory(ctx context.Context, categoryID primitive.ObjectID) ([]*models.Questionnaire, error) {
 	if _, err := s.categoryRepo.GetByID(ctx, categoryID); err != nil {

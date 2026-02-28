@@ -89,3 +89,15 @@ func (r *CategoryRepository) Update(ctx context.Context, id primitive.ObjectID, 
 
 	return nil
 }
+
+// Delete permanently removes a category
+func (r *CategoryRepository) Delete(ctx context.Context, id primitive.ObjectID) error {
+	result, err := r.collection.DeleteOne(ctx, bson.M{"_id": id})
+	if err != nil {
+		return fmt.Errorf("failed to delete category: %w", err)
+	}
+	if result.DeletedCount == 0 {
+		return fmt.Errorf("category not found")
+	}
+	return nil
+}

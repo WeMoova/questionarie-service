@@ -221,6 +221,7 @@ func main() {
 				r.Get("/api/v1/questionnaire-categories", categoryHandler.GetCategories)
 				r.Get("/api/v1/questionnaire-categories/{id}", categoryHandler.GetCategoryByID)
 				r.Put("/api/v1/questionnaire-categories/{id}", categoryHandler.UpdateCategory)
+				r.Delete("/api/v1/questionnaire-categories/{id}", categoryHandler.DeleteCategory)
 				r.Get("/api/v1/questionnaire-categories/{id}/questionnaires", categoryHandler.GetCategoryQuestionnaires)
 			})
 
