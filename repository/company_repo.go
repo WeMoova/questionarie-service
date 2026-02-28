@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"questionarie-service/models"
+	"regexp"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -116,7 +117,7 @@ func (r *CompanyRepository) Count(ctx context.Context) (int64, error) {
 func (r *CompanyRepository) SearchByName(ctx context.Context, name string) ([]*models.Company, error) {
 	filter := bson.M{
 		"name": bson.M{
-			"$regex":   name,
+			"$regex":   regexp.QuoteMeta(name),
 			"$options": "i", // case-insensitive
 		},
 	}

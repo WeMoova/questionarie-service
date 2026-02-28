@@ -67,18 +67,36 @@ func main() {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
 
-	// CORS middleware
+	// CORS middleware — restrict to allowed origins
+	allowedOrigins := map[string]bool{
+		"https://services.wemoova.com":    true,
+		"https://qa.services.wemoova.com": true,
+		"http://localhost:3000":           true,
+	}
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
+			origin := r.Header.Get("Origin")
+			if allowedOrigins[origin] {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Vary", "Origin")
+			}
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			w.Header().Set("Access-Control-Max-Age", "3600")
 
 			if r.Method == "OPTIONS" {
 				w.WriteHeader(http.StatusOK)
 				return
 			}
 
+			next.ServeHTTP(w, r)
+		})
+	})
+
+	// Request body size limit middleware (1MB)
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB
 			next.ServeHTTP(w, r)
 		})
 	})
@@ -96,15 +114,15 @@ func main() {
 			w.Write([]byte("Ready"))
 		})
 
-		// Serve swagger.json file
-		r.Get("/swagger/doc.json", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, "./docs/swagger.json")
-		})
-
-		// Swagger UI (no auth required) - must be after doc.json route
-		r.Get("/swagger*", httpSwagger.Handler(
-			httpSwagger.URL("/questionarie-service/swagger/doc.json"),
-		))
+		// Swagger UI (disabled in production)
+		if os.Getenv("ENV") != "production" {
+			r.Get("/swagger/doc.json", func(w http.ResponseWriter, r *http.Request) {
+				http.ServeFile(w, r, "./docs/swagger.json")
+			})
+			r.Get("/swagger*", httpSwagger.Handler(
+				httpSwagger.URL("/questionarie-service/swagger/doc.json"),
+			))
+		}
 
 		// Protected routes with JWT authentication
 		r.Group(func(r chi.Router) {

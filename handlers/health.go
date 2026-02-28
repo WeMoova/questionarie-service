@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"questionarie-service/db"
@@ -24,11 +25,12 @@ func ReadinessCheck(database *db.PostgresDB) http.HandlerFunc {
 
 		// Check database connection
 		if err := database.HealthCheck(); err != nil {
+			log.Printf("Readiness check failed: %v", err)
 			w.WriteHeader(http.StatusServiceUnavailable)
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"status": "not ready",
 				"checks": map[string]string{
-					"database": "unhealthy: " + err.Error(),
+					"database": "unhealthy",
 				},
 			})
 			return

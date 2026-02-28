@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -49,7 +50,8 @@ func JWTAuth(next http.Handler) http.Handler {
 
 		claims, err := validateToken(tokenString)
 		if err != nil {
-			respondError(w, "Invalid token: "+err.Error(), http.StatusUnauthorized)
+			log.Printf("JWT validation error: %v", err)
+			respondError(w, "Invalid or expired token", http.StatusUnauthorized)
 			return
 		}
 
@@ -65,6 +67,15 @@ func validateToken(tokenString string) (*JWTClaims, error) {
 	}
 
 	jwksURL := fmt.Sprintf("%s/.well-known/jwks.json", fusionAuthURL)
+
+	// Build parser options for audience and issuer validation
+	parserOpts := []jwt.ParserOption{}
+	if aud := os.Getenv("FUSIONAUTH_CLIENT_ID"); aud != "" {
+		parserOpts = append(parserOpts, jwt.WithAudience(aud))
+	}
+	if iss := os.Getenv("FUSIONAUTH_URL"); iss != "" {
+		parserOpts = append(parserOpts, jwt.WithIssuer(iss))
+	}
 
 	token, err := jwt.ParseWithClaims(tokenString, &JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
 		// Verify signing method
@@ -85,7 +96,7 @@ func validateToken(tokenString string) (*JWTClaims, error) {
 		}
 
 		return publicKey, nil
-	})
+	}, parserOpts...)
 
 	if err != nil {
 		return nil, err
