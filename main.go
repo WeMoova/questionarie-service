@@ -149,6 +149,11 @@ func main() {
 			))
 		}
 
+		// Public image serving (no auth required — images are accessed via <img> tags)
+		if imageHandler != nil {
+			r.Get("/api/v1/images/*", imageHandler.GetImage)
+		}
+
 		// Protected routes with JWT authentication
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware.JWTAuth)
@@ -160,8 +165,6 @@ func main() {
 					r.Post("/api/v1/images/upload", imageHandler.UploadImage)
 					r.Delete("/api/v1/images", imageHandler.DeleteImage)
 				})
-				// Image serving (any authenticated user)
-				r.Get("/api/v1/images/*", imageHandler.GetImage)
 			}
 
 			// === Questionnaires READ (Company Admin+) ===
