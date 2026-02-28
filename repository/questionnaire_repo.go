@@ -138,6 +138,41 @@ func (r *QuestionnaireRepository) Deactivate(ctx context.Context, id primitive.O
 	return nil
 }
 
+// Delete permanently removes a questionnaire
+func (r *QuestionnaireRepository) Delete(ctx context.Context, id primitive.ObjectID) error {
+	result, err := r.collection.DeleteOne(ctx, bson.M{"_id": id})
+	if err != nil {
+		return fmt.Errorf("failed to delete questionnaire: %w", err)
+	}
+
+	if result.DeletedCount == 0 {
+		return fmt.Errorf("questionnaire not found")
+	}
+
+	return nil
+}
+
+// ToggleActive sets the is_active status of a questionnaire
+func (r *QuestionnaireRepository) ToggleActive(ctx context.Context, id primitive.ObjectID, isActive bool) error {
+	update := bson.M{
+		"$set": bson.M{
+			"is_active":  isActive,
+			"updated_at": time.Now(),
+		},
+	}
+
+	result, err := r.collection.UpdateOne(ctx, bson.M{"_id": id}, update)
+	if err != nil {
+		return fmt.Errorf("failed to toggle questionnaire status: %w", err)
+	}
+
+	if result.MatchedCount == 0 {
+		return fmt.Errorf("questionnaire not found")
+	}
+
+	return nil
+}
+
 // AddQuestion adds a question to a questionnaire
 func (r *QuestionnaireRepository) AddQuestion(ctx context.Context, id primitive.ObjectID, question models.Question) error {
 	update := bson.M{

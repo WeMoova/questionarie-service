@@ -131,6 +131,16 @@ func (s *QuestionnaireService) DeactivateQuestionnaire(ctx context.Context, id p
 	return s.repo.Deactivate(ctx, id)
 }
 
+// DeleteQuestionnaire permanently removes a questionnaire
+func (s *QuestionnaireService) DeleteQuestionnaire(ctx context.Context, id primitive.ObjectID) error {
+	return s.repo.Delete(ctx, id)
+}
+
+// ToggleQuestionnaireActive sets the active status of a questionnaire
+func (s *QuestionnaireService) ToggleQuestionnaireActive(ctx context.Context, id primitive.ObjectID, isActive bool) error {
+	return s.repo.ToggleActive(ctx, id, isActive)
+}
+
 // AddQuestion adds a question to a questionnaire
 func (s *QuestionnaireService) AddQuestion(ctx context.Context, questionnaireID primitive.ObjectID, question models.Question) error {
 	// Validate question

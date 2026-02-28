@@ -156,8 +156,8 @@ func (h *QuestionnaireHandler) GetQuestionnaireStats(w http.ResponseWriter, r *h
 	utils.RespondWithSuccess(w, http.StatusOK, stats, "")
 }
 
-// DeactivateQuestionnaire handles DELETE /api/v1/questionnaires/:id
-func (h *QuestionnaireHandler) DeactivateQuestionnaire(w http.ResponseWriter, r *http.Request) {
+// DeleteQuestionnaire handles DELETE /api/v1/questionnaires/:id
+func (h *QuestionnaireHandler) DeleteQuestionnaire(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := utils.ValidateObjectID(idStr)
 	if err != nil {
@@ -165,12 +165,38 @@ func (h *QuestionnaireHandler) DeactivateQuestionnaire(w http.ResponseWriter, r 
 		return
 	}
 
-	if err := h.service.DeactivateQuestionnaire(r.Context(), id); err != nil {
+	if err := h.service.DeleteQuestionnaire(r.Context(), id); err != nil {
 		utils.HandleRepositoryError(w, err)
 		return
 	}
 
-	utils.RespondWithSuccess(w, http.StatusOK, nil, "Questionnaire deactivated successfully")
+	utils.RespondWithSuccess(w, http.StatusOK, nil, "Questionnaire deleted successfully")
+}
+
+// ToggleQuestionnaireStatus handles PATCH /api/v1/questionnaires/:id/toggle-status
+func (h *QuestionnaireHandler) ToggleQuestionnaireStatus(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := utils.ValidateObjectID(idStr)
+	if err != nil {
+		utils.BadRequest(w, err.Error())
+		return
+	}
+
+	var req struct {
+		IsActive bool `json:"is_active"`
+	}
+
+	if err := utils.ParseRequestBody(r, &req); err != nil {
+		utils.BadRequest(w, err.Error())
+		return
+	}
+
+	if err := h.service.ToggleQuestionnaireActive(r.Context(), id, req.IsActive); err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, nil, "Questionnaire status updated successfully")
 }
 
 // AddQuestion handles POST /api/v1/questionnaires/:id/questions
