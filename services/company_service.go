@@ -60,8 +60,39 @@ func NewCompanyService(
 	}
 }
 
+// validateHexColor validates that a string is a valid 7-char hex color (e.g. #FF5500)
+func validateHexColor(color string) error {
+	if len(color) != 7 || color[0] != '#' {
+		return fmt.Errorf("must be a 7-char hex color (e.g. #FF5500)")
+	}
+	for _, c := range color[1:] {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return fmt.Errorf("contains invalid hex character: %c", c)
+		}
+	}
+	return nil
+}
+
+// validateBranding validates branding fields
+func validateBranding(b *models.Branding) error {
+	if b == nil {
+		return nil
+	}
+	if b.PrimaryColor != "" {
+		if err := validateHexColor(b.PrimaryColor); err != nil {
+			return fmt.Errorf("invalid primary_color: %w", err)
+		}
+	}
+	if b.SecondaryColor != "" {
+		if err := validateHexColor(b.SecondaryColor); err != nil {
+			return fmt.Errorf("invalid secondary_color: %w", err)
+		}
+	}
+	return nil
+}
+
 // CreateCompany creates a new company (Super Admin only)
-func (s *CompanyService) CreateCompany(ctx context.Context, name string, isActive bool) (*models.Company, error) {
+func (s *CompanyService) CreateCompany(ctx context.Context, name string, isActive bool, branding *models.Branding, customDomain *models.CustomDomain) (*models.Company, error) {
 	if name == "" {
 		return nil, fmt.Errorf("company name is required")
 	}
@@ -69,8 +100,24 @@ func (s *CompanyService) CreateCompany(ctx context.Context, name string, isActiv
 		return nil, fmt.Errorf("company name must be at least 3 characters")
 	}
 
+	if err := validateBranding(branding); err != nil {
+		return nil, err
+	}
+
+	if customDomain != nil && customDomain.Slug != "" {
+		existing, err := s.companyRepo.GetBySlug(ctx, customDomain.Slug)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check slug uniqueness: %w", err)
+		}
+		if existing != nil {
+			return nil, fmt.Errorf("slug '%s' is already in use", customDomain.Slug)
+		}
+	}
+
 	company := models.NewCompany(name)
 	company.IsActive = isActive
+	company.Branding = branding
+	company.CustomDomain = customDomain
 
 	if err := s.companyRepo.Create(ctx, company); err != nil {
 		return nil, fmt.Errorf("failed to create company: %w", err)
@@ -121,7 +168,7 @@ func (s *CompanyService) GetAllCompanies(ctx context.Context, page, pageSize int
 }
 
 // UpdateCompany updates a company
-func (s *CompanyService) UpdateCompany(ctx context.Context, id primitive.ObjectID, name string, isActive *bool) error {
+func (s *CompanyService) UpdateCompany(ctx context.Context, id primitive.ObjectID, name string, isActive *bool, branding *models.Branding, customDomain *models.CustomDomain) error {
 	company, err := s.companyRepo.GetByID(ctx, id)
 	if err != nil {
 		return err
@@ -132,6 +179,24 @@ func (s *CompanyService) UpdateCompany(ctx context.Context, id primitive.ObjectI
 	}
 	if isActive != nil {
 		company.IsActive = *isActive
+	}
+	if branding != nil {
+		if err := validateBranding(branding); err != nil {
+			return err
+		}
+		company.Branding = branding
+	}
+	if customDomain != nil {
+		if customDomain.Slug != "" {
+			existing, err := s.companyRepo.GetBySlug(ctx, customDomain.Slug)
+			if err != nil {
+				return fmt.Errorf("failed to check slug uniqueness: %w", err)
+			}
+			if existing != nil && existing.ID != id {
+				return fmt.Errorf("slug '%s' is already in use", customDomain.Slug)
+			}
+		}
+		company.CustomDomain = customDomain
 	}
 	company.UpdatedAt = time.Now()
 

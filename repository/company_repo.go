@@ -70,13 +70,18 @@ func (r *CompanyRepository) GetAll(ctx context.Context, page, pageSize int64) ([
 
 // Update updates a company
 func (r *CompanyRepository) Update(ctx context.Context, id primitive.ObjectID, company *models.Company) error {
-	update := bson.M{
-		"$set": bson.M{
-			"name":       company.Name,
-			"is_active":  company.IsActive,
-			"updated_at": company.UpdatedAt,
-		},
+	setFields := bson.M{
+		"name":       company.Name,
+		"is_active":  company.IsActive,
+		"updated_at": company.UpdatedAt,
 	}
+	if company.Branding != nil {
+		setFields["branding"] = company.Branding
+	}
+	if company.CustomDomain != nil {
+		setFields["custom_domain"] = company.CustomDomain
+	}
+	update := bson.M{"$set": setFields}
 
 	result, err := r.collection.UpdateOne(ctx, bson.M{"_id": id}, update)
 	if err != nil {
@@ -111,6 +116,19 @@ func (r *CompanyRepository) Count(ctx context.Context) (int64, error) {
 		return 0, fmt.Errorf("failed to count companies: %w", err)
 	}
 	return count, nil
+}
+
+// GetBySlug finds a company by its custom domain slug
+func (r *CompanyRepository) GetBySlug(ctx context.Context, slug string) (*models.Company, error) {
+	var company models.Company
+	err := r.collection.FindOne(ctx, bson.M{"custom_domain.slug": slug}).Decode(&company)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to find company by slug: %w", err)
+	}
+	return &company, nil
 }
 
 // SearchByName searches companies by name (case-insensitive)

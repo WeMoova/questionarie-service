@@ -27,8 +27,10 @@ func NewCompanyHandler(service *services.CompanyService) *CompanyHandler {
 // CreateCompany handles POST /api/v1/companies
 func (h *CompanyHandler) CreateCompany(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name     string `json:"name"`
-		IsActive *bool  `json:"is_active"`
+		Name         string              `json:"name"`
+		IsActive     *bool               `json:"is_active"`
+		Branding     *models.Branding    `json:"branding"`
+		CustomDomain *models.CustomDomain `json:"custom_domain"`
 	}
 
 	if err := utils.ParseRequestBody(r, &req); err != nil {
@@ -42,7 +44,7 @@ func (h *CompanyHandler) CreateCompany(w http.ResponseWriter, r *http.Request) {
 		isActive = *req.IsActive
 	}
 
-	company, err := h.service.CreateCompany(r.Context(), req.Name, isActive)
+	company, err := h.service.CreateCompany(r.Context(), req.Name, isActive, req.Branding, req.CustomDomain)
 	if err != nil {
 		utils.HandleRepositoryError(w, err)
 		return
@@ -111,8 +113,10 @@ func (h *CompanyHandler) UpdateCompany(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Name     string `json:"name"`
-		IsActive *bool  `json:"is_active"`
+		Name         string              `json:"name"`
+		IsActive     *bool               `json:"is_active"`
+		Branding     *models.Branding    `json:"branding"`
+		CustomDomain *models.CustomDomain `json:"custom_domain"`
 	}
 
 	if err := utils.ParseRequestBody(r, &req); err != nil {
@@ -120,7 +124,7 @@ func (h *CompanyHandler) UpdateCompany(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.UpdateCompany(r.Context(), id, req.Name, req.IsActive); err != nil {
+	if err := h.service.UpdateCompany(r.Context(), id, req.Name, req.IsActive, req.Branding, req.CustomDomain); err != nil {
 		utils.HandleRepositoryError(w, err)
 		return
 	}
