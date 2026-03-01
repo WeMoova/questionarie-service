@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"questionarie-service/models"
+	"regexp"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -88,6 +89,26 @@ func (r *CategoryRepository) Update(ctx context.Context, id primitive.ObjectID, 
 	}
 
 	return nil
+}
+
+// GetByName retrieves a category by exact name (case-insensitive)
+func (r *CategoryRepository) GetByName(ctx context.Context, name string) (*models.QuestionnaireCategory, error) {
+	escaped := regexp.QuoteMeta(name)
+	filter := bson.M{
+		"name": bson.M{
+			"$regex":   "^" + escaped + "$",
+			"$options": "i",
+		},
+	}
+	var category models.QuestionnaireCategory
+	err := r.collection.FindOne(ctx, filter).Decode(&category)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, nil // not found, no error
+		}
+		return nil, fmt.Errorf("failed to get category by name: %w", err)
+	}
+	return &category, nil
 }
 
 // Delete permanently removes a category

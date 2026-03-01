@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"questionarie-service/middleware"
 	"questionarie-service/models"
+	"questionarie-service/repository"
 	"questionarie-service/services"
 	"questionarie-service/utils"
 	"strconv"
@@ -14,13 +15,15 @@ import (
 
 // QuestionnaireHandler handles questionnaire-related HTTP requests
 type QuestionnaireHandler struct {
-	service *services.QuestionnaireService
+	service         *services.QuestionnaireService
+	categoryService *services.CategoryService
 }
 
 // NewQuestionnaireHandler creates a new QuestionnaireHandler
-func NewQuestionnaireHandler(service *services.QuestionnaireService) *QuestionnaireHandler {
+func NewQuestionnaireHandler(service *services.QuestionnaireService, categoryService *services.CategoryService) *QuestionnaireHandler {
 	return &QuestionnaireHandler{
-		service: service,
+		service:         service,
+		categoryService: categoryService,
 	}
 }
 
@@ -63,15 +66,35 @@ func (h *QuestionnaireHandler) CreateQuestionnaire(w http.ResponseWriter, r *htt
 func (h *QuestionnaireHandler) GetQuestionnaires(w http.ResponseWriter, r *http.Request) {
 	page, _ := strconv.ParseInt(r.URL.Query().Get("page"), 10, 64)
 	pageSize, _ := strconv.ParseInt(r.URL.Query().Get("page_size"), 10, 64)
-	activeOnly := r.URL.Query().Get("active") == "true"
 
-	questionnaires, err := h.service.GetAllQuestionnaires(r.Context(), page, pageSize, activeOnly)
+	filter := repository.QuestionnaireFilter{
+		Search: r.URL.Query().Get("search"),
+	}
+
+	if activeParam := r.URL.Query().Get("active"); activeParam != "" {
+		val := activeParam == "true"
+		filter.IsActive = &val
+	}
+
+	if catID := r.URL.Query().Get("category_id"); catID != "" {
+		id, err := utils.ValidateObjectID(catID)
+		if err != nil {
+			utils.BadRequest(w, "invalid category_id: "+err.Error())
+			return
+		}
+		filter.CategoryID = &id
+	}
+
+	questionnaires, total, err := h.service.GetAllQuestionnaires(r.Context(), page, pageSize, filter)
 	if err != nil {
 		utils.HandleRepositoryError(w, err)
 		return
 	}
 
-	utils.RespondWithSuccess(w, http.StatusOK, questionnaires, "")
+	utils.RespondWithSuccess(w, http.StatusOK, map[string]interface{}{
+		"data":  questionnaires,
+		"total": total,
+	}, "")
 }
 
 // GetQuestionnaireByID handles GET /api/v1/questionnaires/:id
@@ -430,16 +453,19 @@ func (h *QuestionnaireHandler) DeleteSection(w http.ResponseWriter, r *http.Requ
 }
 
 // ImportQuestionnaire handles POST /api/v1/questionnaires/import
-// Creates a complete questionnaire with sections, questions, and evaluation config in one call
+// Creates a complete questionnaire with sections, questions, and evaluation config in one call.
+// Supports category_name: if the category doesn't exist, it is created automatically.
+// category_name takes priority over category_id when both are provided.
 func (h *QuestionnaireHandler) ImportQuestionnaire(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Title            string                  `json:"title"`
-		Description      string                  `json:"description"`
-		CoverImage       string                  `json:"cover_image"`
-		Tags             []string                `json:"tags"`
-		CategoryID       string                  `json:"category_id"`
-		Sections         []models.Section        `json:"sections"`
-		Questions        []models.Question       `json:"questions"`
+		Title            string                   `json:"title"`
+		Description      string                   `json:"description"`
+		CoverImage       string                   `json:"cover_image"`
+		Tags             []string                 `json:"tags"`
+		CategoryID       string                   `json:"category_id"`
+		CategoryName     string                   `json:"category_name"`
+		Sections         []models.Section         `json:"sections"`
+		Questions        []models.Question        `json:"questions"`
 		EvaluationConfig *models.EvaluationConfig `json:"evaluation_config"`
 	}
 
@@ -449,7 +475,16 @@ func (h *QuestionnaireHandler) ImportQuestionnaire(w http.ResponseWriter, r *htt
 	}
 
 	var categoryID *primitive.ObjectID
-	if req.CategoryID != "" {
+
+	// category_name takes priority: find or create the category by name
+	if req.CategoryName != "" && h.categoryService != nil {
+		cat, err := h.categoryService.GetOrCreateByName(r.Context(), req.CategoryName)
+		if err != nil {
+			utils.BadRequest(w, "category error: "+err.Error())
+			return
+		}
+		categoryID = &cat.ID
+	} else if req.CategoryID != "" {
 		id, err := utils.ValidateObjectID(req.CategoryID)
 		if err != nil {
 			utils.BadRequest(w, "invalid category_id: "+err.Error())

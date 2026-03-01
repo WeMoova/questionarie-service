@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"questionarie-service/models"
+	"regexp"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -11,6 +12,13 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+// QuestionnaireFilter holds optional filters for listing questionnaires
+type QuestionnaireFilter struct {
+	Search     string              // searches in title and questions.question_text
+	CategoryID *primitive.ObjectID // filter by category_id
+	IsActive   *bool              // filter by is_active (nil = all, true = active only, false = inactive only)
+}
 
 // QuestionnaireRepository handles questionnaire data operations
 type QuestionnaireRepository struct {
@@ -46,13 +54,29 @@ func (r *QuestionnaireRepository) GetByID(ctx context.Context, id primitive.Obje
 	return &questionnaire, nil
 }
 
-// GetAll retrieves all questionnaires with pagination
-func (r *QuestionnaireRepository) GetAll(ctx context.Context, page, pageSize int64, activeOnly bool) ([]*models.Questionnaire, error) {
-	skip := (page - 1) * pageSize
+// buildFilter constructs a bson.M filter from a QuestionnaireFilter
+func buildFilter(f QuestionnaireFilter) bson.M {
 	filter := bson.M{}
-	if activeOnly {
-		filter["is_active"] = true
+	if f.IsActive != nil {
+		filter["is_active"] = *f.IsActive
 	}
+	if f.CategoryID != nil {
+		filter["category_id"] = *f.CategoryID
+	}
+	if f.Search != "" {
+		escaped := regexp.QuoteMeta(f.Search)
+		filter["$or"] = bson.A{
+			bson.M{"title": bson.M{"$regex": escaped, "$options": "i"}},
+			bson.M{"questions": bson.M{"$elemMatch": bson.M{"question_text": bson.M{"$regex": escaped, "$options": "i"}}}},
+		}
+	}
+	return filter
+}
+
+// GetAll retrieves all questionnaires with pagination and filters
+func (r *QuestionnaireRepository) GetAll(ctx context.Context, page, pageSize int64, f QuestionnaireFilter) ([]*models.Questionnaire, error) {
+	skip := (page - 1) * pageSize
+	filter := buildFilter(f)
 
 	opts := options.Find().
 		SetSkip(skip).
@@ -327,13 +351,9 @@ func (r *QuestionnaireRepository) SetEvaluationConfig(ctx context.Context, id pr
 	return nil
 }
 
-// Count returns the total number of questionnaires
-func (r *QuestionnaireRepository) Count(ctx context.Context, activeOnly bool) (int64, error) {
-	filter := bson.M{}
-	if activeOnly {
-		filter["is_active"] = true
-	}
-
+// Count returns the total number of questionnaires matching the filter
+func (r *QuestionnaireRepository) Count(ctx context.Context, f QuestionnaireFilter) (int64, error) {
+	filter := buildFilter(f)
 	count, err := r.collection.CountDocuments(ctx, filter)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count questionnaires: %w", err)

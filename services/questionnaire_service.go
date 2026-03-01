@@ -51,8 +51,8 @@ func (s *QuestionnaireService) GetQuestionnaireByID(ctx context.Context, id prim
 	return s.repo.GetByID(ctx, id)
 }
 
-// GetAllQuestionnaires retrieves all questionnaires with pagination
-func (s *QuestionnaireService) GetAllQuestionnaires(ctx context.Context, page, pageSize int64, activeOnly bool) ([]*models.Questionnaire, error) {
+// GetAllQuestionnaires retrieves all questionnaires with pagination and filters
+func (s *QuestionnaireService) GetAllQuestionnaires(ctx context.Context, page, pageSize int64, filter repository.QuestionnaireFilter) ([]*models.Questionnaire, int64, error) {
 	if page <= 0 {
 		page = 1
 	}
@@ -63,7 +63,17 @@ func (s *QuestionnaireService) GetAllQuestionnaires(ctx context.Context, page, p
 		pageSize = 100
 	}
 
-	return s.repo.GetAll(ctx, page, pageSize, activeOnly)
+	questionnaires, err := s.repo.GetAll(ctx, page, pageSize, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	total, err := s.repo.Count(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return questionnaires, total, nil
 }
 
 // GetQuestionnairesByCreator retrieves questionnaires created by a user
@@ -181,12 +191,13 @@ func (s *QuestionnaireService) RemoveQuestion(ctx context.Context, questionnaire
 
 // GetQuestionnaireStats returns statistics about questionnaires
 func (s *QuestionnaireService) GetQuestionnaireStats(ctx context.Context) (map[string]interface{}, error) {
-	total, err := s.repo.Count(ctx, false)
+	total, err := s.repo.Count(ctx, repository.QuestionnaireFilter{})
 	if err != nil {
 		return nil, err
 	}
 
-	active, err := s.repo.Count(ctx, true)
+	activeVal := true
+	active, err := s.repo.Count(ctx, repository.QuestionnaireFilter{IsActive: &activeVal})
 	if err != nil {
 		return nil, err
 	}

@@ -66,7 +66,7 @@ func main() {
 	categoryService := services.NewCategoryService(categoryRepo, questionnaireRepo)
 
 	// Initialize handlers
-	questionnaireHandler := handlers.NewQuestionnaireHandler(questionnaireService)
+	questionnaireHandler := handlers.NewQuestionnaireHandler(questionnaireService, categoryService)
 	companyHandler := handlers.NewCompanyHandler(companyService)
 	userMetadataHandler := handlers.NewUserMetadataHandler(userMetadataService)
 	assignmentHandler := handlers.NewAssignmentHandler(assignmentService)

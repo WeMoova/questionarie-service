@@ -36,6 +36,26 @@ func (s *CategoryService) CreateCategory(ctx context.Context, name, description 
 	return category, nil
 }
 
+// GetOrCreateByName finds a category by name (case-insensitive) or creates it if it doesn't exist
+func (s *CategoryService) GetOrCreateByName(ctx context.Context, name string) (*models.QuestionnaireCategory, error) {
+	if len(name) < 3 {
+		return nil, fmt.Errorf("category name must be at least 3 characters")
+	}
+	existing, err := s.categoryRepo.GetByName(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		return existing, nil
+	}
+	// Create new category
+	category := models.NewQuestionnaireCategory(name, "")
+	if err := s.categoryRepo.Create(ctx, category); err != nil {
+		return nil, fmt.Errorf("failed to create category: %w", err)
+	}
+	return category, nil
+}
+
 // GetAllCategories retrieves all categories
 func (s *CategoryService) GetAllCategories(ctx context.Context, activeOnly bool) ([]*models.QuestionnaireCategory, error) {
 	return s.categoryRepo.GetAll(ctx, activeOnly)
