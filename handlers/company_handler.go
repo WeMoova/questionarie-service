@@ -145,6 +145,7 @@ func (h *CompanyHandler) AssignQuestionnaireToCompany(w http.ResponseWriter, r *
 		QuestionnaireID string `json:"questionnaire_id"`
 		PeriodStart     string `json:"period_start"`
 		PeriodEnd       string `json:"period_end"`
+		DisplayMode     string `json:"display_mode"`
 	}
 
 	if err := utils.ParseRequestBody(r, &req); err != nil {
@@ -171,7 +172,7 @@ func (h *CompanyHandler) AssignQuestionnaireToCompany(w http.ResponseWriter, r *
 	}
 
 	claims, _ := middleware.GetUserFromContext(r.Context())
-	cq, err := h.service.AssignQuestionnaireToCompany(r.Context(), companyID, questionnaireID, claims.Sub, periodStart, periodEnd)
+	cq, err := h.service.AssignQuestionnaireToCompany(r.Context(), companyID, questionnaireID, claims.Sub, periodStart, periodEnd, req.DisplayMode)
 	if err != nil {
 		utils.HandleRepositoryError(w, err)
 		return
@@ -451,6 +452,7 @@ func (h *CompanyHandler) UpdateCompanyQuestionnaire(w http.ResponseWriter, r *ht
 		PeriodStart string `json:"period_start"`
 		PeriodEnd   string `json:"period_end"`
 		IsActive    *bool  `json:"is_active"`
+		DisplayMode string `json:"display_mode"`
 	}
 
 	if err := utils.ParseRequestBody(r, &req); err != nil {
@@ -484,7 +486,7 @@ func (h *CompanyHandler) UpdateCompanyQuestionnaire(w http.ResponseWriter, r *ht
 	claims, _ := middleware.GetUserFromContext(r.Context())
 	isSuperAdmin := middleware.IsSuperAdmin(r.Context())
 
-	if err := h.service.UpdateCompanyQuestionnaire(r.Context(), id, periodStart, periodEnd, isActive, claims.Sub, isSuperAdmin); err != nil {
+	if err := h.service.UpdateCompanyQuestionnaire(r.Context(), id, periodStart, periodEnd, isActive, req.DisplayMode, claims.Sub, isSuperAdmin); err != nil {
 		utils.HandleRepositoryError(w, err)
 		return
 	}

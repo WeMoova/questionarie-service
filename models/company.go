@@ -13,6 +13,7 @@ type Branding struct {
 	Favicon              string `bson:"favicon,omitempty" json:"favicon,omitempty"`
 	PrimaryColor         string `bson:"primary_color,omitempty" json:"primary_color,omitempty"`
 	SecondaryColor       string `bson:"secondary_color,omitempty" json:"secondary_color,omitempty"`
+	AccentColor          string `bson:"accent_color,omitempty" json:"accent_color,omitempty"`
 	LoginBackgroundImage string `bson:"login_background_image,omitempty" json:"login_background_image,omitempty"`
 	WelcomeMessage       string `bson:"welcome_message,omitempty" json:"welcome_message,omitempty"`
 }

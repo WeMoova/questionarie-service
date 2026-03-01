@@ -71,6 +71,15 @@ const (
 	CQStatusExpired CompanyQuestionnaireStatus = "expired" // period ended automatically
 )
 
+// DisplayMode controls how questions are presented to the employee
+type DisplayMode string
+
+const (
+	DisplayModeStepByStep DisplayMode = "step_by_step"  // one question per page (default)
+	DisplayModeAllAtOnce  DisplayMode = "all_at_once"   // all questions on one scrollable page
+	DisplayModeBySection  DisplayMode = "by_section"    // one section per page, multiple questions
+)
+
 // StatusChange records a state transition in the lifecycle
 type StatusChange struct {
 	Status    CompanyQuestionnaireStatus `bson:"status" json:"status"`
@@ -148,6 +157,7 @@ type CompanyQuestionnaire struct {
 	StatusHistory   []StatusChange             `bson:"status_history" json:"status_history"`
 	RemindersSent   int                        `bson:"reminders_sent" json:"reminders_sent"`
 	LastReminderAt  *time.Time                 `bson:"last_reminder_at,omitempty" json:"last_reminder_at,omitempty"`
+	DisplayMode     DisplayMode                `bson:"display_mode,omitempty" json:"display_mode,omitempty"`
 	// Transient fields — not persisted, populated by service layer
 	QuestionnaireTitle       string `bson:"-" json:"questionnaire_title,omitempty"`
 	QuestionnaireDescription string `bson:"-" json:"questionnaire_description,omitempty"`

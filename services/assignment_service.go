@@ -252,6 +252,13 @@ func (s *AssignmentService) enrichAssignments(ctx context.Context, assignments [
 			companyCache[cq.CompanyID] = company
 		}
 		a.CompanyName = company.Name
+
+		// Set display_mode from company questionnaire
+		if string(cq.DisplayMode) != "" {
+			a.DisplayMode = string(cq.DisplayMode)
+		} else {
+			a.DisplayMode = "step_by_step"
+		}
 	}
 }
 
@@ -621,11 +628,17 @@ func (s *AssignmentService) GetMyQuestionnaires(ctx context.Context, userID stri
 			continue
 		}
 
+		displayMode := string(cq.DisplayMode)
+		if displayMode == "" {
+			displayMode = "step_by_step"
+		}
+
 		item := map[string]interface{}{
 			"company_questionnaire_id": cq.ID.Hex(),
 			"period_start":             cq.PeriodStart,
 			"period_end":               cq.PeriodEnd,
 			"assignment_status":        "not_started",
+			"display_mode":             displayMode,
 		}
 
 		// Enrich with questionnaire data

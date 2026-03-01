@@ -88,6 +88,11 @@ func validateBranding(b *models.Branding) error {
 			return fmt.Errorf("invalid secondary_color: %w", err)
 		}
 	}
+	if b.AccentColor != "" {
+		if err := validateHexColor(b.AccentColor); err != nil {
+			return fmt.Errorf("invalid accent_color: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -223,6 +228,7 @@ func (s *CompanyService) AssignQuestionnaireToCompany(
 	companyID, questionnaireID primitive.ObjectID,
 	assignedBy string,
 	periodStart, periodEnd time.Time,
+	displayMode string,
 ) (*models.CompanyQuestionnaire, error) {
 	// Validate company exists
 	if _, err := s.companyRepo.GetByID(ctx, companyID); err != nil {
@@ -257,6 +263,9 @@ func (s *CompanyService) AssignQuestionnaireToCompany(
 
 	// Create assignment
 	cq := models.NewCompanyQuestionnaire(companyID, questionnaireID, assignedBy, periodStart, periodEnd)
+	if displayMode != "" {
+		cq.DisplayMode = models.DisplayMode(displayMode)
+	}
 
 	if err := s.companyQuestionnaireRepo.Create(ctx, cq); err != nil {
 		return nil, fmt.Errorf("failed to assign questionnaire: %w", err)
@@ -290,7 +299,7 @@ func (s *CompanyService) GetActiveCompanyQuestionnaires(ctx context.Context, com
 }
 
 // UpdateCompanyQuestionnaire updates a company questionnaire assignment period
-func (s *CompanyService) UpdateCompanyQuestionnaire(ctx context.Context, id primitive.ObjectID, periodStart, periodEnd time.Time, isActive bool, userID string, isSuperAdmin bool) error {
+func (s *CompanyService) UpdateCompanyQuestionnaire(ctx context.Context, id primitive.ObjectID, periodStart, periodEnd time.Time, isActive bool, displayMode string, userID string, isSuperAdmin bool) error {
 	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, id)
 	if err != nil {
 		return err
@@ -314,6 +323,10 @@ func (s *CompanyService) UpdateCompanyQuestionnaire(ctx context.Context, id prim
 		}
 		cq.PeriodStart = periodStart
 		cq.PeriodEnd = periodEnd
+	}
+
+	if displayMode != "" {
+		cq.DisplayMode = models.DisplayMode(displayMode)
 	}
 
 	cq.IsActive = isActive

@@ -39,6 +39,7 @@ type UserQuestionnaireAssignment struct {
 	CompanyName              string `bson:"-" json:"company_name,omitempty"`
 	TotalQuestions           int    `bson:"-" json:"total_questions,omitempty"`
 	QuestionnaireID          string `bson:"-" json:"questionnaire_id,omitempty"`
+	DisplayMode              string `bson:"-" json:"display_mode,omitempty"`
 }
 
 // NewUserQuestionnaireAssignment creates a new assignment
