@@ -25,6 +25,8 @@ type Question struct {
 	IsRequired    bool                   `bson:"is_required" json:"is_required"`
 	SectionID     string                 `bson:"section_id,omitempty" json:"section_id,omitempty"`
 	DimensionCode string                 `bson:"dimension_code,omitempty" json:"dimension_code,omitempty"`
+	HasDetail     bool                   `bson:"has_detail,omitempty" json:"has_detail,omitempty"`
+	DetailPrompt  string                 `bson:"detail_prompt,omitempty" json:"detail_prompt,omitempty"`
 }
 
 // NewQuestion creates a new Question with a unique ID
