@@ -491,3 +491,25 @@ func (h *CompanyHandler) UpdateCompanyQuestionnaire(w http.ResponseWriter, r *ht
 
 	utils.RespondWithSuccess(w, http.StatusOK, nil, "Company questionnaire updated successfully")
 }
+
+// GetCompanyBrandingBySlug handles GET /api/v1/public/company-branding/{slug}
+// Public endpoint — no authentication required.
+func (h *CompanyHandler) GetCompanyBrandingBySlug(w http.ResponseWriter, r *http.Request) {
+	slug := chi.URLParam(r, "slug")
+	if slug == "" {
+		utils.BadRequest(w, "slug is required")
+		return
+	}
+
+	result, err := h.service.GetCompanyBrandingBySlug(r.Context(), slug)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+	if result == nil {
+		utils.RespondWithError(w, http.StatusNotFound, "company not found")
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, result, "")
+}

@@ -634,6 +634,31 @@ func (s *CompanyService) GetCompanyDashboard(ctx context.Context, companyID prim
 }
 
 // GetCompanyStats returns statistics about a company
+// PublicCompanyBranding is the subset of company data returned by the public branding endpoint
+type PublicCompanyBranding struct {
+	CompanyName string          `json:"company_name"`
+	Branding    *models.Branding `json:"branding,omitempty"`
+}
+
+// GetCompanyBrandingBySlug looks up an active company by slug and returns only branding info.
+// Returns nil, nil if the slug is not found or the company is inactive.
+func (s *CompanyService) GetCompanyBrandingBySlug(ctx context.Context, slug string) (*PublicCompanyBranding, error) {
+	if slug == "" {
+		return nil, fmt.Errorf("slug is required")
+	}
+	company, err := s.companyRepo.GetBySlug(ctx, slug)
+	if err != nil {
+		return nil, err
+	}
+	if company == nil || !company.IsActive {
+		return nil, nil
+	}
+	return &PublicCompanyBranding{
+		CompanyName: company.Name,
+		Branding:    company.Branding,
+	}, nil
+}
+
 func (s *CompanyService) GetCompanyStats(ctx context.Context, companyID primitive.ObjectID) (map[string]interface{}, error) {
 	company, err := s.companyRepo.GetByID(ctx, companyID)
 	if err != nil {

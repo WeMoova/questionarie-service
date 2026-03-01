@@ -95,6 +95,7 @@ func main() {
 		"https://services.wemoova.com":    true,
 		"https://qa.services.wemoova.com": true,
 		"http://localhost:3000":           true,
+		"http://localhost:3001":           true,
 	}
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -153,6 +154,9 @@ func main() {
 		if imageHandler != nil {
 			r.Get("/api/v1/images/*", imageHandler.GetImage)
 		}
+
+		// Public company branding (no auth — employee app pre-login)
+		r.Get("/api/v1/public/company-branding/{slug}", companyHandler.GetCompanyBrandingBySlug)
 
 		// Protected routes with JWT authentication
 		r.Group(func(r chi.Router) {
