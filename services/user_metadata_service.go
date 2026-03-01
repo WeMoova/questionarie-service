@@ -85,6 +85,15 @@ func (s *UserMetadataService) GetUserMetadata(ctx context.Context, userID string
 	return s.userMetadataRepo.GetByID(ctx, userID)
 }
 
+// GetCompanyName retrieves the company name by company ID
+func (s *UserMetadataService) GetCompanyName(ctx context.Context, companyID primitive.ObjectID) (string, error) {
+	company, err := s.companyRepo.GetByID(ctx, companyID)
+	if err != nil {
+		return "", err
+	}
+	return company.Name, nil
+}
+
 // GetUsersByCompany retrieves all users for a company
 func (s *UserMetadataService) GetUsersByCompany(ctx context.Context, companyID primitive.ObjectID, page, pageSize int64) ([]*models.UserMetadata, error) {
 	if page <= 0 {

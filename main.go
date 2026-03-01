@@ -61,7 +61,7 @@ func main() {
 	userMetadataService := services.NewUserMetadataService(userMetadataRepo, companyRepo)
 	gamificationService := services.NewGamificationService(gamificationRepo, userMetadataRepo)
 	evaluationService := services.NewEvaluationService(questionnaireRepo, assignmentRepo)
-	assignmentService := services.NewAssignmentService(assignmentRepo, companyQuestionnaireRepo, userMetadataRepo, questionnaireRepo, gamificationService, evaluationService)
+	assignmentService := services.NewAssignmentService(assignmentRepo, companyQuestionnaireRepo, userMetadataRepo, questionnaireRepo, companyRepo, categoryRepo, gamificationService, evaluationService)
 	reportService := services.NewReportService(assignmentRepo, companyQuestionnaireRepo, userMetadataRepo, questionnaireRepo, companyRepo)
 	categoryService := services.NewCategoryService(categoryRepo, questionnaireRepo)
 
@@ -343,6 +343,7 @@ func main() {
 				// View my assignments
 				r.Get("/api/v1/my-assignments", assignmentHandler.GetMyAssignments)
 				r.Get("/api/v1/assignments/{id}", assignmentHandler.GetAssignmentByID)
+				r.Get("/api/v1/assignments/{id}/questions", assignmentHandler.GetAssignmentQuestions)
 
 				// Save responses
 				r.Post("/api/v1/assignments/{id}/responses", responseHandler.SaveResponse)

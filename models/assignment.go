@@ -32,6 +32,13 @@ type UserQuestionnaireAssignment struct {
 	DueDate                *time.Time         `bson:"due_date,omitempty" json:"due_date,omitempty"`
 	Responses              []Response         `bson:"responses" json:"responses"`
 	EvaluationResult       *EvaluationResult  `bson:"evaluation_result,omitempty" json:"evaluation_result,omitempty"`
+	// Transient fields — not persisted, populated by service layer
+	QuestionnaireTitle       string `bson:"-" json:"questionnaire_title,omitempty"`
+	QuestionnaireDescription string `bson:"-" json:"questionnaire_description,omitempty"`
+	QuestionnaireCategory    string `bson:"-" json:"questionnaire_category,omitempty"`
+	CompanyName              string `bson:"-" json:"company_name,omitempty"`
+	TotalQuestions           int    `bson:"-" json:"total_questions,omitempty"`
+	QuestionnaireID          string `bson:"-" json:"questionnaire_id,omitempty"`
 }
 
 // NewUserQuestionnaireAssignment creates a new assignment

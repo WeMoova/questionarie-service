@@ -16,6 +16,8 @@ type AssignmentService struct {
 	companyQuestionnaireRepo *repository.CompanyQuestionnaireRepository
 	userMetadataRepo         *repository.UserMetadataRepository
 	questionnaireRepo        *repository.QuestionnaireRepository
+	companyRepo              *repository.CompanyRepository
+	categoryRepo             *repository.CategoryRepository
 	gamificationService      *GamificationService
 	evaluationService        *EvaluationService
 }
@@ -26,6 +28,8 @@ func NewAssignmentService(
 	companyQuestionnaireRepo *repository.CompanyQuestionnaireRepository,
 	userMetadataRepo *repository.UserMetadataRepository,
 	questionnaireRepo *repository.QuestionnaireRepository,
+	companyRepo *repository.CompanyRepository,
+	categoryRepo *repository.CategoryRepository,
 	gamificationService *GamificationService,
 	evaluationService *EvaluationService,
 ) *AssignmentService {
@@ -34,6 +38,8 @@ func NewAssignmentService(
 		companyQuestionnaireRepo: companyQuestionnaireRepo,
 		userMetadataRepo:         userMetadataRepo,
 		questionnaireRepo:        questionnaireRepo,
+		companyRepo:              companyRepo,
+		categoryRepo:             categoryRepo,
 		gamificationService:      gamificationService,
 		evaluationService:        evaluationService,
 	}
@@ -146,14 +152,107 @@ func (s *AssignmentService) AssignToUsers(
 	return assignments, nil
 }
 
-// GetAssignmentByID retrieves an assignment by ID
+// GetAssignmentByID retrieves an assignment by ID (enriched with questionnaire data)
 func (s *AssignmentService) GetAssignmentByID(ctx context.Context, id primitive.ObjectID) (*models.UserQuestionnaireAssignment, error) {
-	return s.assignmentRepo.GetByID(ctx, id)
+	assignment, err := s.assignmentRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	s.enrichAssignments(ctx, []*models.UserQuestionnaireAssignment{assignment})
+	return assignment, nil
 }
 
-// GetUserAssignments retrieves all assignments for a user
+// GetUserAssignments retrieves all assignments for a user (enriched with questionnaire data)
 func (s *AssignmentService) GetUserAssignments(ctx context.Context, userID string, status *models.AssignmentStatus) ([]*models.UserQuestionnaireAssignment, error) {
-	return s.assignmentRepo.GetByUserID(ctx, userID, status)
+	assignments, err := s.assignmentRepo.GetByUserID(ctx, userID, status)
+	if err != nil {
+		return nil, err
+	}
+	s.enrichAssignments(ctx, assignments)
+	return assignments, nil
+}
+
+// GetAssignmentQuestions returns the questions for the questionnaire associated with an assignment
+func (s *AssignmentService) GetAssignmentQuestions(ctx context.Context, assignmentID primitive.ObjectID) ([]models.Question, error) {
+	assignment, err := s.assignmentRepo.GetByID(ctx, assignmentID)
+	if err != nil {
+		return nil, err
+	}
+
+	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, assignment.CompanyQuestionnaireID)
+	if err != nil {
+		return nil, fmt.Errorf("company questionnaire not found: %w", err)
+	}
+
+	questionnaire, err := s.questionnaireRepo.GetByID(ctx, cq.QuestionnaireID)
+	if err != nil {
+		return nil, fmt.Errorf("questionnaire not found: %w", err)
+	}
+
+	return questionnaire.Questions, nil
+}
+
+// enrichAssignments populates transient fields on assignments (questionnaire title, company name, etc.)
+func (s *AssignmentService) enrichAssignments(ctx context.Context, assignments []*models.UserQuestionnaireAssignment) {
+	// Cache to avoid repeated lookups
+	cqCache := make(map[primitive.ObjectID]*models.CompanyQuestionnaire)
+	qCache := make(map[primitive.ObjectID]*models.Questionnaire)
+	companyCache := make(map[primitive.ObjectID]*models.Company)
+	categoryCache := make(map[primitive.ObjectID]string)
+
+	for _, a := range assignments {
+		// Get company questionnaire
+		cq, ok := cqCache[a.CompanyQuestionnaireID]
+		if !ok {
+			var err error
+			cq, err = s.companyQuestionnaireRepo.GetByID(ctx, a.CompanyQuestionnaireID)
+			if err != nil {
+				continue
+			}
+			cqCache[a.CompanyQuestionnaireID] = cq
+		}
+
+		// Get questionnaire
+		q, ok := qCache[cq.QuestionnaireID]
+		if !ok {
+			var err error
+			q, err = s.questionnaireRepo.GetByID(ctx, cq.QuestionnaireID)
+			if err != nil {
+				continue
+			}
+			qCache[cq.QuestionnaireID] = q
+		}
+
+		a.QuestionnaireTitle = q.Title
+		a.QuestionnaireDescription = q.Description
+		a.TotalQuestions = len(q.Questions)
+		a.QuestionnaireID = q.ID.Hex()
+
+		// Get category name
+		if q.CategoryID != nil {
+			catName, ok := categoryCache[*q.CategoryID]
+			if !ok {
+				cat, err := s.categoryRepo.GetByID(ctx, *q.CategoryID)
+				if err == nil {
+					catName = cat.Name
+				}
+				categoryCache[*q.CategoryID] = catName
+			}
+			a.QuestionnaireCategory = catName
+		}
+
+		// Get company name
+		company, ok := companyCache[cq.CompanyID]
+		if !ok {
+			var err error
+			company, err = s.companyRepo.GetByID(ctx, cq.CompanyID)
+			if err != nil {
+				continue
+			}
+			companyCache[cq.CompanyID] = company
+		}
+		a.CompanyName = company.Name
+	}
 }
 
 // GetCompanyQuestionnaireAssignments retrieves all assignments for a company questionnaire

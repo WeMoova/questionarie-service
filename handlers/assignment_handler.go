@@ -131,6 +131,37 @@ func (h *AssignmentHandler) GetAssignmentByID(w http.ResponseWriter, r *http.Req
 	utils.RespondWithSuccess(w, http.StatusOK, assignment, "")
 }
 
+// GetAssignmentQuestions handles GET /api/v1/assignments/:id/questions
+func (h *AssignmentHandler) GetAssignmentQuestions(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := utils.ValidateObjectID(idStr)
+	if err != nil {
+		utils.BadRequest(w, err.Error())
+		return
+	}
+
+	// Verify ownership: get assignment first
+	assignment, err := h.service.GetAssignmentByID(r.Context(), id)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	claims, _ := middleware.GetUserFromContext(r.Context())
+	if !middleware.IsSuperAdmin(r.Context()) && assignment.UserID != claims.Sub {
+		utils.Forbidden(w, "unauthorized to access this assignment")
+		return
+	}
+
+	questions, err := h.service.GetAssignmentQuestions(r.Context(), id)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, questions, "")
+}
+
 // GetMyCompanyQuestionnaires handles GET /api/v1/my-company/questionnaires
 func (h *AssignmentHandler) GetMyCompanyQuestionnaires(w http.ResponseWriter, r *http.Request) {
 	claims, _ := middleware.GetUserFromContext(r.Context())

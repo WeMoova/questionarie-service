@@ -186,6 +186,12 @@ func (h *UserMetadataHandler) GetMyMetadata(w http.ResponseWriter, r *http.Reque
 		response["role"] = claims.Roles[0]
 	}
 
+	// Add company name
+	companyName, err := h.service.GetCompanyName(r.Context(), metadata.CompanyID)
+	if err == nil && companyName != "" {
+		response["company_name"] = companyName
+	}
+
 	// Add optional fields
 	if metadata.SupervisorID != "" {
 		response["supervisor_id"] = metadata.SupervisorID
