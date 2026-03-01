@@ -341,8 +341,10 @@ func main() {
 			r.Group(func(r chi.Router) {
 				r.Use(authMiddleware.RequireEmployee())
 
-				// View my assignments
+				// View my assignments and company questionnaires
 				r.Get("/api/v1/my-assignments", assignmentHandler.GetMyAssignments)
+				r.Get("/api/v1/my-questionnaires", assignmentHandler.GetMyQuestionnaires)
+				r.Post("/api/v1/company-questionnaires/{id}/start", assignmentHandler.StartQuestionnaire)
 				r.Get("/api/v1/assignments/{id}", assignmentHandler.GetAssignmentByID)
 				r.Get("/api/v1/assignments/{id}/questions", assignmentHandler.GetAssignmentQuestions)
 

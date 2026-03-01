@@ -598,3 +598,98 @@ func (s *AssignmentService) GetAssignmentsByStatus(ctx context.Context, cqID pri
 
 	return s.assignmentRepo.GetByCompanyQuestionnaireIDAndStatus(ctx, cqID, status)
 }
+
+// GetMyQuestionnaires returns active company questionnaires for the user's company
+// with the user's assignment status for each one.
+func (s *AssignmentService) GetMyQuestionnaires(ctx context.Context, userID string) ([]map[string]interface{}, error) {
+	// Get user's company
+	userMeta, err := s.userMetadataRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("user metadata not found: %w", err)
+	}
+
+	// Get active CQs for the company
+	cqs, err := s.companyQuestionnaireRepo.GetByCompanyID(ctx, userMeta.CompanyID, false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get company questionnaires: %w", err)
+	}
+
+	result := make([]map[string]interface{}, 0, len(cqs))
+	for _, cq := range cqs {
+		// Only show active CQs to employees
+		if cq.Status != models.CQStatusActive {
+			continue
+		}
+
+		item := map[string]interface{}{
+			"company_questionnaire_id": cq.ID.Hex(),
+			"period_start":             cq.PeriodStart,
+			"period_end":               cq.PeriodEnd,
+			"assignment_status":        "not_started",
+		}
+
+		// Enrich with questionnaire data
+		q, err := s.questionnaireRepo.GetByID(ctx, cq.QuestionnaireID)
+		if err == nil {
+			item["questionnaire_title"] = q.Title
+			item["questionnaire_description"] = q.Description
+			item["total_questions"] = len(q.Questions)
+			if q.CategoryID != nil {
+				cat, catErr := s.categoryRepo.GetByID(ctx, *q.CategoryID)
+				if catErr == nil {
+					item["questionnaire_category"] = cat.Name
+				}
+			}
+		}
+
+		// Check if user has an existing assignment
+		assignment, err := s.assignmentRepo.GetByUserAndCQ(ctx, userID, cq.ID)
+		if err == nil && assignment != nil {
+			item["assignment_id"] = assignment.ID.Hex()
+			item["assignment_status"] = string(assignment.Status)
+		}
+
+		result = append(result, item)
+	}
+
+	return result, nil
+}
+
+// StartQuestionnaire creates an assignment for a user if one doesn't exist,
+// or returns the existing one. Used when an employee clicks "Start" on a company questionnaire.
+func (s *AssignmentService) StartQuestionnaire(ctx context.Context, userID string, cqID primitive.ObjectID) (*models.UserQuestionnaireAssignment, error) {
+	// Get and validate CQ
+	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, cqID)
+	if err != nil {
+		return nil, fmt.Errorf("company questionnaire not found: %w", err)
+	}
+	if cq.Status != models.CQStatusActive {
+		return nil, fmt.Errorf("company questionnaire is not active")
+	}
+
+	// Validate user belongs to the same company
+	userMeta, err := s.userMetadataRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("user metadata not found: %w", err)
+	}
+	if cq.CompanyID != userMeta.CompanyID {
+		return nil, fmt.Errorf("unauthorized: questionnaire not in your company")
+	}
+
+	// Check for existing non-cancelled assignment
+	existing, err := s.assignmentRepo.GetByUserAndCQ(ctx, userID, cqID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check existing assignment: %w", err)
+	}
+	if existing != nil {
+		return existing, nil
+	}
+
+	// Create new assignment
+	assignment := models.NewUserQuestionnaireAssignment(cqID, userID, "self")
+	if err := s.assignmentRepo.Create(ctx, assignment); err != nil {
+		return nil, fmt.Errorf("failed to create assignment: %w", err)
+	}
+
+	return assignment, nil
+}

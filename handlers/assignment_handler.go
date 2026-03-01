@@ -106,6 +106,39 @@ func (h *AssignmentHandler) GetMyAssignments(w http.ResponseWriter, r *http.Requ
 	utils.RespondWithSuccess(w, http.StatusOK, assignments, "")
 }
 
+// GetMyQuestionnaires handles GET /api/v1/my-questionnaires
+func (h *AssignmentHandler) GetMyQuestionnaires(w http.ResponseWriter, r *http.Request) {
+	claims, _ := middleware.GetUserFromContext(r.Context())
+
+	questionnaires, err := h.service.GetMyQuestionnaires(r.Context(), claims.Sub)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, questionnaires, "")
+}
+
+// StartQuestionnaire handles POST /api/v1/company-questionnaires/:id/start
+func (h *AssignmentHandler) StartQuestionnaire(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	cqID, err := utils.ValidateObjectID(idStr)
+	if err != nil {
+		utils.BadRequest(w, err.Error())
+		return
+	}
+
+	claims, _ := middleware.GetUserFromContext(r.Context())
+
+	assignment, err := h.service.StartQuestionnaire(r.Context(), claims.Sub, cqID)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, assignment, "Assignment created")
+}
+
 // GetAssignmentByID handles GET /api/v1/assignments/:id
 func (h *AssignmentHandler) GetAssignmentByID(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")

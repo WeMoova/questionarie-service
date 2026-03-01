@@ -367,3 +367,20 @@ func (r *AssignmentRepository) CheckDuplicate(ctx context.Context, userID string
 
 	return count > 0, nil
 }
+
+// GetByUserAndCQ retrieves a non-cancelled assignment for a user and company questionnaire
+func (r *AssignmentRepository) GetByUserAndCQ(ctx context.Context, userID string, cqID primitive.ObjectID) (*models.UserQuestionnaireAssignment, error) {
+	var assignment models.UserQuestionnaireAssignment
+	err := r.collection.FindOne(ctx, bson.M{
+		"user_id":                  userID,
+		"company_questionnaire_id": cqID,
+		"status":                   bson.M{"$ne": models.AssignmentStatusCancelled},
+	}).Decode(&assignment)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get assignment: %w", err)
+	}
+	return &assignment, nil
+}
