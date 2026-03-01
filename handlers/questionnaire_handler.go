@@ -85,16 +85,13 @@ func (h *QuestionnaireHandler) GetQuestionnaires(w http.ResponseWriter, r *http.
 		filter.CategoryID = &id
 	}
 
-	questionnaires, total, err := h.service.GetAllQuestionnaires(r.Context(), page, pageSize, filter)
+	questionnaires, _, err := h.service.GetAllQuestionnaires(r.Context(), page, pageSize, filter)
 	if err != nil {
 		utils.HandleRepositoryError(w, err)
 		return
 	}
 
-	utils.RespondWithSuccess(w, http.StatusOK, map[string]interface{}{
-		"data":  questionnaires,
-		"total": total,
-	}, "")
+	utils.RespondWithSuccess(w, http.StatusOK, questionnaires, "")
 }
 
 // GetQuestionnaireByID handles GET /api/v1/questionnaires/:id
