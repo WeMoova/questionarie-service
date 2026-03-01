@@ -181,6 +181,7 @@ func main() {
 
 				r.Post("/api/v1/questionnaires/import", questionnaireHandler.ImportQuestionnaire)
 				r.Post("/api/v1/questionnaires", questionnaireHandler.CreateQuestionnaire)
+				r.Post("/api/v1/questionnaires/{id}/duplicate", questionnaireHandler.DuplicateQuestionnaire)
 				r.Put("/api/v1/questionnaires/{id}", questionnaireHandler.UpdateQuestionnaire)
 				r.Delete("/api/v1/questionnaires/{id}", questionnaireHandler.DeleteQuestionnaire)
 				r.Patch("/api/v1/questionnaires/{id}/toggle-status", questionnaireHandler.ToggleQuestionnaireStatus)

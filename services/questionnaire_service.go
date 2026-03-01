@@ -272,6 +272,53 @@ func (s *QuestionnaireService) ImportQuestionnaire(ctx context.Context, title, d
 	return questionnaire, nil
 }
 
+// DuplicateQuestionnaire creates a copy of an existing questionnaire with a new title and optional category
+func (s *QuestionnaireService) DuplicateQuestionnaire(ctx context.Context, sourceID primitive.ObjectID, title, createdBy string, categoryID *primitive.ObjectID) (*models.Questionnaire, error) {
+	if title == "" {
+		return nil, fmt.Errorf("title is required")
+	}
+	if len(title) < 5 {
+		return nil, fmt.Errorf("title must be at least 5 characters")
+	}
+
+	source, err := s.repo.GetByID(ctx, sourceID)
+	if err != nil {
+		return nil, fmt.Errorf("source questionnaire not found: %w", err)
+	}
+
+	dup := models.NewQuestionnaire(title, source.Description, createdBy)
+	dup.CoverImage = source.CoverImage
+	dup.Tags = append([]string{}, source.Tags...)
+	dup.Sections = append([]models.Section{}, source.Sections...)
+	if source.EvaluationConfig != nil {
+		configCopy := *source.EvaluationConfig
+		configCopy.Dimensions = append([]models.DimensionConfig{}, source.EvaluationConfig.Dimensions...)
+		dup.EvaluationConfig = &configCopy
+	}
+
+	// Use provided categoryID, or fall back to original
+	if categoryID != nil {
+		dup.CategoryID = categoryID
+	} else {
+		dup.CategoryID = source.CategoryID
+	}
+
+	// Deep-copy questions with new UUIDs
+	questions := make([]models.Question, len(source.Questions))
+	for i, q := range source.Questions {
+		questions[i] = q
+		newQ := models.NewQuestion(q.QuestionText, q.QuestionType, q.OrderIndex, q.IsRequired)
+		questions[i].QuestionID = newQ.QuestionID
+	}
+	dup.Questions = questions
+
+	if err := s.repo.Create(ctx, dup); err != nil {
+		return nil, fmt.Errorf("failed to duplicate questionnaire: %w", err)
+	}
+
+	return dup, nil
+}
+
 // ValidateQuestionnaire validates that a questionnaire is complete and ready to be assigned
 func (s *QuestionnaireService) ValidateQuestionnaire(ctx context.Context, id primitive.ObjectID) error {
 	questionnaire, err := s.repo.GetByID(ctx, id)

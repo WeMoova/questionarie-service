@@ -512,6 +512,46 @@ func (h *QuestionnaireHandler) ImportQuestionnaire(w http.ResponseWriter, r *htt
 	utils.RespondWithSuccess(w, http.StatusCreated, questionnaire, "Questionnaire imported successfully")
 }
 
+// DuplicateQuestionnaire handles POST /api/v1/questionnaires/:id/duplicate
+func (h *QuestionnaireHandler) DuplicateQuestionnaire(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := utils.ValidateObjectID(idStr)
+	if err != nil {
+		utils.BadRequest(w, err.Error())
+		return
+	}
+
+	var req struct {
+		Title      string `json:"title"`
+		CategoryID string `json:"category_id"`
+	}
+
+	if err := utils.ParseRequestBody(r, &req); err != nil {
+		utils.BadRequest(w, err.Error())
+		return
+	}
+
+	var categoryID *primitive.ObjectID
+	if req.CategoryID != "" {
+		catID, err := utils.ValidateObjectID(req.CategoryID)
+		if err != nil {
+			utils.BadRequest(w, "invalid category_id: "+err.Error())
+			return
+		}
+		categoryID = &catID
+	}
+
+	claims, _ := middleware.GetUserFromContext(r.Context())
+
+	questionnaire, err := h.service.DuplicateQuestionnaire(r.Context(), id, req.Title, claims.Sub, categoryID)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusCreated, questionnaire, "Questionnaire duplicated successfully")
+}
+
 // SetEvaluationConfig handles PUT /api/v1/questionnaires/:id/evaluation-config
 func (h *QuestionnaireHandler) SetEvaluationConfig(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
