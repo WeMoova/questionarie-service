@@ -332,6 +332,45 @@ func (s *CompanyService) DeactivateCompanyQuestionnaire(ctx context.Context, id 
 	return s.companyQuestionnaireRepo.Deactivate(ctx, id)
 }
 
+// DeleteCompanyQuestionnaire hard-deletes a company questionnaire if no responses exist
+func (s *CompanyService) DeleteCompanyQuestionnaire(ctx context.Context, cqID primitive.ObjectID, userID string, isSuperAdmin bool) error {
+	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, cqID)
+	if err != nil {
+		return err
+	}
+
+	if !isSuperAdmin {
+		userMeta, err := s.userMetadataRepo.GetByID(ctx, userID)
+		if err != nil {
+			return fmt.Errorf("unauthorized: user metadata not found")
+		}
+		if cq.CompanyID != userMeta.CompanyID {
+			return fmt.Errorf("unauthorized: company questionnaire not in your company")
+		}
+	}
+
+	// Check if any assignment has responses
+	assignments, err := s.assignmentRepo.GetByCompanyQuestionnaireID(ctx, cqID)
+	if err != nil {
+		return fmt.Errorf("failed to check assignments: %w", err)
+	}
+	for _, a := range assignments {
+		if len(a.Responses) > 0 {
+			return fmt.Errorf("no se puede eliminar: existen respuestas registradas")
+		}
+	}
+
+	// Cancel all pending/in-progress assignments
+	if len(assignments) > 0 {
+		if _, err := s.assignmentRepo.CancelAllPendingByCompanyQuestionnaire(ctx, cqID, userID, "company questionnaire deleted"); err != nil {
+			return fmt.Errorf("failed to cancel assignments: %w", err)
+		}
+	}
+
+	// Delete the company questionnaire
+	return s.companyQuestionnaireRepo.Delete(ctx, cqID)
+}
+
 // DeactivateCompany soft-deletes a company
 func (s *CompanyService) DeactivateCompany(ctx context.Context, id primitive.ObjectID) error {
 	company, err := s.companyRepo.GetByID(ctx, id)

@@ -296,6 +296,7 @@ func main() {
 				r.Get("/api/v1/companies/{company_id}/questionnaires", companyHandler.GetCompanyQuestionnaires)
 				r.Get("/api/v1/company-questionnaires/{id}", companyHandler.GetCompanyQuestionnaire)
 				r.Put("/api/v1/company-questionnaires/{id}", companyHandler.UpdateCompanyQuestionnaire)
+				r.Delete("/api/v1/company-questionnaires/{id}", companyHandler.DeleteCompanyQuestionnaire)
 
 				// Lifecycle transitions
 				r.Post("/api/v1/company-questionnaires/{id}/activate", companyHandler.ActivateCompanyQuestionnaire)

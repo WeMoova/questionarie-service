@@ -379,6 +379,26 @@ func (h *CompanyHandler) SendReminder(w http.ResponseWriter, r *http.Request) {
 	utils.RespondWithSuccess(w, http.StatusOK, result, "Reminder registered successfully")
 }
 
+// DeleteCompanyQuestionnaire handles DELETE /api/v1/company-questionnaires/:id
+func (h *CompanyHandler) DeleteCompanyQuestionnaire(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := utils.ValidateObjectID(idStr)
+	if err != nil {
+		utils.BadRequest(w, err.Error())
+		return
+	}
+
+	claims, _ := middleware.GetUserFromContext(r.Context())
+	isSuperAdmin := middleware.IsSuperAdmin(r.Context())
+
+	if err := h.service.DeleteCompanyQuestionnaire(r.Context(), id, claims.Sub, isSuperAdmin); err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, nil, "Company questionnaire deleted")
+}
+
 // GetCompanyDashboard handles GET /api/v1/companies/:company_id/dashboard
 func (h *CompanyHandler) GetCompanyDashboard(w http.ResponseWriter, r *http.Request) {
 	companyIDStr := chi.URLParam(r, "company_id")
