@@ -97,7 +97,7 @@ func main() {
 	assignmentHandler := handlers.NewAssignmentHandler(assignmentService)
 	responseHandler := handlers.NewResponseHandler(assignmentService)
 	reportHandler := handlers.NewReportHandler(reportService)
-	categoryHandler := handlers.NewCategoryHandler(categoryService)
+	categoryHandler := handlers.NewCategoryHandler(categoryService, companyService)
 	gamificationHandler := handlers.NewGamificationHandler(gamificationService)
 	apiTokenHandler := handlers.NewAPITokenHandler(apiTokenService)
 

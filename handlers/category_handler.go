@@ -2,21 +2,26 @@ package handlers
 
 import (
 	"net/http"
+	"questionarie-service/middleware"
+	"questionarie-service/models"
 	"questionarie-service/services"
 	"questionarie-service/utils"
 
 	"github.com/go-chi/chi/v5"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // CategoryHandler handles questionnaire category HTTP requests
 type CategoryHandler struct {
-	service *services.CategoryService
+	service        *services.CategoryService
+	companyService *services.CompanyService
 }
 
 // NewCategoryHandler creates a new CategoryHandler
-func NewCategoryHandler(service *services.CategoryService) *CategoryHandler {
+func NewCategoryHandler(service *services.CategoryService, companyService *services.CompanyService) *CategoryHandler {
 	return &CategoryHandler{
-		service: service,
+		service:        service,
+		companyService: companyService,
 	}
 }
 
@@ -49,6 +54,43 @@ func (h *CategoryHandler) GetCategories(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		utils.HandleRepositoryError(w, err)
 		return
+	}
+
+	// For company_admin with visibility "assigned", filter to only categories
+	// that belong to their assigned questionnaires
+	if !middleware.IsSuperAdmin(r.Context()) && h.companyService != nil {
+		claims, _ := middleware.GetUserFromContext(r.Context())
+		if claims != nil {
+			company, err := h.companyService.GetMyCompany(r.Context(), claims.Sub)
+			if err == nil && company != nil &&
+				company.Settings != nil &&
+				company.Settings.QuestionnaireVisibility == "assigned" {
+				// Get assigned questionnaires to extract their category IDs
+				cqs, err := h.companyService.GetCompanyQuestionnaires(r.Context(), company.ID, false)
+				if err != nil {
+					utils.HandleRepositoryError(w, err)
+					return
+				}
+				qIDs := make([]primitive.ObjectID, 0, len(cqs))
+				for _, cq := range cqs {
+					qIDs = append(qIDs, cq.QuestionnaireID)
+				}
+				allowedCategoryIDs, err := h.service.GetCategoryIDsForQuestionnaires(r.Context(), qIDs)
+				if err != nil {
+					utils.HandleRepositoryError(w, err)
+					return
+				}
+				// Filter categories
+				filtered := make([]*models.QuestionnaireCategory, 0)
+				for _, cat := range categories {
+					if allowedCategoryIDs[cat.ID] {
+						filtered = append(filtered, cat)
+					}
+				}
+				utils.RespondWithSuccess(w, http.StatusOK, filtered, "")
+				return
+			}
+		}
 	}
 
 	utils.RespondWithSuccess(w, http.StatusOK, categories, "")

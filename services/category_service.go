@@ -93,6 +93,22 @@ func (s *CategoryService) DeleteCategory(ctx context.Context, id primitive.Objec
 	return s.categoryRepo.Delete(ctx, id)
 }
 
+// GetCategoryIDsForQuestionnaires returns the set of category IDs used by the given questionnaire IDs
+func (s *CategoryService) GetCategoryIDsForQuestionnaires(ctx context.Context, questionnaireIDs []primitive.ObjectID) (map[primitive.ObjectID]bool, error) {
+	filter := repository.QuestionnaireFilter{IDs: questionnaireIDs}
+	questionnaires, err := s.questionnaireRepo.GetAll(ctx, 1, int64(len(questionnaireIDs)+1), filter)
+	if err != nil {
+		return nil, err
+	}
+	categoryIDs := make(map[primitive.ObjectID]bool)
+	for _, q := range questionnaires {
+		if q.CategoryID != nil {
+			categoryIDs[*q.CategoryID] = true
+		}
+	}
+	return categoryIDs, nil
+}
+
 // GetQuestionnairesByCategory retrieves all questionnaires for a category
 func (s *CategoryService) GetQuestionnairesByCategory(ctx context.Context, categoryID primitive.ObjectID) ([]*models.Questionnaire, error) {
 	if _, err := s.categoryRepo.GetByID(ctx, categoryID); err != nil {
