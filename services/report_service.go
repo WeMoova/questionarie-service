@@ -4,8 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
+	"io"
 	"math"
+	"net/http"
+	"os"
 	"questionarie-service/models"
 	"questionarie-service/repository"
 	"sort"
@@ -1488,4 +1492,224 @@ func (s *ReportService) GetScoreDistribution(ctx context.Context, cqID primitive
 	}
 
 	return &ScoreDistribution{Dimensions: dimensions}, nil
+}
+
+// SendReportEmail sends a report summary email for a company questionnaire via Resend
+func (s *ReportService) SendReportEmail(ctx context.Context, cqID primitive.ObjectID, userID string, isSuperAdmin bool, recipients []string, subject string, customMessage string) error {
+	// Get company questionnaire
+	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, cqID)
+	if err != nil {
+		return fmt.Errorf("company questionnaire not found: %w", err)
+	}
+
+	// Verify authorization
+	if !isSuperAdmin {
+		userMeta, err := s.userMetadataRepo.GetByID(ctx, userID)
+		if err != nil {
+			return fmt.Errorf("user metadata not found: %w", err)
+		}
+		if cq.CompanyID != userMeta.CompanyID {
+			return fmt.Errorf("unauthorized: cannot access reports from other companies")
+		}
+	}
+
+	// Get company for branding
+	company, err := s.companyRepo.GetByID(ctx, cq.CompanyID)
+	if err != nil {
+		return fmt.Errorf("company not found: %w", err)
+	}
+
+	// Get completion metrics
+	metrics, err := s.GetCompletionMetrics(ctx, cqID, userID, isSuperAdmin)
+	if err != nil {
+		return fmt.Errorf("failed to get completion metrics: %w", err)
+	}
+
+	// Get dimension summary
+	dimSummary, err := s.GetDimensionSummary(ctx, cqID, userID, isSuperAdmin)
+	if err != nil {
+		return fmt.Errorf("failed to get dimension summary: %w", err)
+	}
+
+	// Build HTML
+	htmlBody := s.buildReportEmailHTML(company, metrics, dimSummary, customMessage)
+
+	// Use questionnaire title as subject if not provided
+	if subject == "" {
+		subject = fmt.Sprintf("Reporte de %s", metrics.QuestionnaireTitle)
+	}
+
+	return s.sendViaResend(recipients, subject, htmlBody)
+}
+
+// sendViaResend sends an email via the Resend HTTP API
+func (s *ReportService) sendViaResend(to []string, subject, htmlBody string) error {
+	apiKey := os.Getenv("RESEND_API_KEY")
+	if apiKey == "" {
+		return fmt.Errorf("RESEND_API_KEY not configured")
+	}
+
+	payload := map[string]interface{}{
+		"from":    "WeMoova <no-reply@wemoova.com>",
+		"to":      to,
+		"subject": subject,
+		"html":    htmlBody,
+	}
+	body, _ := json.Marshal(payload)
+	req, _ := http.NewRequest("POST", "https://api.resend.com/emails", bytes.NewBuffer(body))
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send email: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("resend API error %d: %s", resp.StatusCode, string(respBody))
+	}
+	return nil
+}
+
+// buildReportEmailHTML builds an HTML email with inline CSS for the report summary
+func (s *ReportService) buildReportEmailHTML(company *models.Company, metrics *CompletionMetrics, dimSummary *DimensionSummary, customMessage string) string {
+	// Determine branding
+	primaryColor := "#3ba5cc"
+	logoHTML := ""
+	if company.Branding != nil {
+		if company.Branding.PrimaryColor != "" {
+			primaryColor = company.Branding.PrimaryColor
+		}
+		if company.Branding.Logo != "" {
+			logoHTML = fmt.Sprintf(`<div style="text-align:center;margin-bottom:24px;"><img src="%s" alt="%s" style="max-height:60px;max-width:200px;" /></div>`, company.Branding.Logo, company.Name)
+		}
+	}
+
+	// Completion rate formatted
+	completionRate := fmt.Sprintf("%.1f%%", metrics.CompletionPercentage)
+	avgTime := fmt.Sprintf("%.1f min", metrics.AvgTimeToComplete)
+
+	// Build dimension rows
+	dimensionRows := ""
+	for _, dim := range dimSummary.Dimensions {
+		// Find predominant level (highest count threshold)
+		predominantLevel := ""
+		predominantColor := "#888888"
+		maxCount := 0
+		for _, t := range dim.Thresholds {
+			if t.Count > maxCount {
+				maxCount = t.Count
+				predominantLevel = t.Label
+				if t.Color != "" {
+					predominantColor = t.Color
+				}
+			}
+		}
+
+		dimensionRows += fmt.Sprintf(`<tr>
+			<td style="padding:10px 12px;border-bottom:1px solid #eee;font-size:14px;">%s</td>
+			<td style="padding:10px 12px;border-bottom:1px solid #eee;font-size:14px;text-align:center;">%.1f</td>
+			<td style="padding:10px 12px;border-bottom:1px solid #eee;text-align:center;">
+				<span style="display:inline-block;padding:4px 12px;border-radius:12px;font-size:12px;font-weight:600;color:#fff;background-color:%s;">%s</span>
+			</td>
+		</tr>`, dim.Name, dim.AvgScore, predominantColor, predominantLevel)
+	}
+
+	// Custom message block
+	customMessageHTML := ""
+	if customMessage != "" {
+		customMessageHTML = fmt.Sprintf(`<div style="background-color:#f8f9fa;border-left:4px solid %s;padding:16px;margin:24px 0;border-radius:0 8px 8px 0;">
+			<p style="margin:0;font-size:14px;color:#555;font-style:italic;">%s</p>
+		</div>`, primaryColor, customMessage)
+	}
+
+	// Dimension table (only if there are dimensions)
+	dimensionTableHTML := ""
+	if len(dimSummary.Dimensions) > 0 {
+		dimensionTableHTML = fmt.Sprintf(`<h2 style="font-size:18px;color:#333;margin:32px 0 16px 0;">Resumen por Dimensiones</h2>
+		<table style="width:100%%;border-collapse:collapse;border-radius:8px;overflow:hidden;">
+			<thead>
+				<tr style="background-color:%s;">
+					<th style="padding:12px;text-align:left;color:#fff;font-size:13px;font-weight:600;">Dimension</th>
+					<th style="padding:12px;text-align:center;color:#fff;font-size:13px;font-weight:600;">Puntaje Promedio</th>
+					<th style="padding:12px;text-align:center;color:#fff;font-size:13px;font-weight:600;">Nivel Predominante</th>
+				</tr>
+			</thead>
+			<tbody>
+				%s
+			</tbody>
+		</table>`, primaryColor, dimensionRows)
+	}
+
+	currentDate := time.Now().Format("02/01/2006")
+
+	html := fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background-color:#f4f4f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+<div style="max-width:600px;margin:0 auto;padding:20px;">
+	<div style="background-color:#ffffff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.08);overflow:hidden;">
+		<!-- Header -->
+		<div style="background-color:%s;padding:32px 24px;text-align:center;">
+			%s
+			<h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">Reporte de %s</h1>
+			<p style="margin:8px 0 0 0;color:rgba(255,255,255,0.85);font-size:14px;">%s</p>
+		</div>
+
+		<!-- Body -->
+		<div style="padding:32px 24px;">
+			%s
+
+			<!-- KPI Summary -->
+			<h2 style="font-size:18px;color:#333;margin:0 0 16px 0;">Resumen General</h2>
+			<table style="width:100%%;border-collapse:collapse;border-radius:8px;overflow:hidden;">
+				<thead>
+					<tr style="background-color:%s;">
+						<th style="padding:12px;text-align:left;color:#fff;font-size:13px;font-weight:600;">Metrica</th>
+						<th style="padding:12px;text-align:right;color:#fff;font-size:13px;font-weight:600;">Valor</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr><td style="padding:10px 12px;border-bottom:1px solid #eee;font-size:14px;">Asignados</td><td style="padding:10px 12px;border-bottom:1px solid #eee;font-size:14px;text-align:right;font-weight:600;">%d</td></tr>
+					<tr><td style="padding:10px 12px;border-bottom:1px solid #eee;font-size:14px;">Completados</td><td style="padding:10px 12px;border-bottom:1px solid #eee;font-size:14px;text-align:right;font-weight:600;">%d</td></tr>
+					<tr><td style="padding:10px 12px;border-bottom:1px solid #eee;font-size:14px;">Tasa de Completitud</td><td style="padding:10px 12px;border-bottom:1px solid #eee;font-size:14px;text-align:right;font-weight:600;">%s</td></tr>
+					<tr><td style="padding:10px 12px;font-size:14px;">Tiempo Promedio</td><td style="padding:10px 12px;font-size:14px;text-align:right;font-weight:600;">%s</td></tr>
+				</tbody>
+			</table>
+
+			%s
+
+			<!-- CTA Button -->
+			<div style="text-align:center;margin:32px 0 16px 0;">
+				<a href="https://qa.admin.wemoova.com/dashboard/reports" style="display:inline-block;padding:14px 32px;background-color:%s;color:#ffffff;text-decoration:none;border-radius:8px;font-size:15px;font-weight:600;">Ver Reporte Completo</a>
+			</div>
+		</div>
+
+		<!-- Footer -->
+		<div style="background-color:#f8f9fa;padding:20px 24px;text-align:center;border-top:1px solid #eee;">
+			<p style="margin:0;font-size:12px;color:#999;">Generado por WeMoova &mdash; %s</p>
+		</div>
+	</div>
+</div>
+</body>
+</html>`,
+		primaryColor,
+		logoHTML,
+		metrics.QuestionnaireTitle,
+		metrics.CompanyName,
+		customMessageHTML,
+		primaryColor,
+		metrics.Assigned,
+		metrics.Completed,
+		completionRate,
+		avgTime,
+		dimensionTableHTML,
+		primaryColor,
+		currentDate,
+	)
+
+	return html
 }

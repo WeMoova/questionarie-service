@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"encoding/json"
+	"io"
 	"net/http"
 	"questionarie-service/middleware"
 	"questionarie-service/services"
@@ -274,4 +276,47 @@ func (h *ReportHandler) ExportCSV(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", "attachment; filename=\"questionnaire_responses.csv\"")
 	w.WriteHeader(http.StatusOK)
 	w.Write(data)
+}
+
+// SendReportEmail handles POST /api/v1/reports/company-questionnaire/:cq_id/send-email
+func (h *ReportHandler) SendReportEmail(w http.ResponseWriter, r *http.Request) {
+	cqIDStr := chi.URLParam(r, "cq_id")
+	cqID, err := utils.ValidateObjectID(cqIDStr)
+	if err != nil {
+		utils.BadRequest(w, err.Error())
+		return
+	}
+
+	// Parse request body
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		utils.BadRequest(w, "failed to read request body")
+		return
+	}
+	defer r.Body.Close()
+
+	var req struct {
+		Recipients    []string `json:"recipients"`
+		Subject       string   `json:"subject"`
+		CustomMessage string   `json:"custom_message"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		utils.BadRequest(w, "invalid JSON format")
+		return
+	}
+
+	if len(req.Recipients) == 0 {
+		utils.BadRequest(w, "at least one recipient is required")
+		return
+	}
+
+	claims, _ := middleware.GetUserFromContext(r.Context())
+	isSuperAdmin := middleware.IsSuperAdmin(r.Context())
+
+	if err := h.service.SendReportEmail(r.Context(), cqID, claims.Sub, isSuperAdmin, req.Recipients, req.Subject, req.CustomMessage); err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, nil, "Email enviado exitosamente")
 }
