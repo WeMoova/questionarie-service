@@ -113,11 +113,12 @@ func (r *CompanyQuestionnaireRepository) GetActiveByCompanyAndPeriod(ctx context
 func (r *CompanyQuestionnaireRepository) Update(ctx context.Context, id primitive.ObjectID, cq *models.CompanyQuestionnaire) error {
 	update := bson.M{
 		"$set": bson.M{
-			"period_start":    cq.PeriodStart,
-			"period_end":      cq.PeriodEnd,
-			"is_active":       cq.IsActive,
-			"status":          cq.Status,
-			"status_history":  cq.StatusHistory,
+			"period_start":   cq.PeriodStart,
+			"period_end":     cq.PeriodEnd,
+			"is_active":      cq.IsActive,
+			"status":         cq.Status,
+			"status_history": cq.StatusHistory,
+			"display_mode":   cq.DisplayMode,
 		},
 	}
 
