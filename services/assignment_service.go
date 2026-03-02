@@ -172,8 +172,14 @@ func (s *AssignmentService) GetUserAssignments(ctx context.Context, userID strin
 	return assignments, nil
 }
 
-// GetAssignmentQuestions returns the questions for the questionnaire associated with an assignment
-func (s *AssignmentService) GetAssignmentQuestions(ctx context.Context, assignmentID primitive.ObjectID) ([]models.Question, error) {
+// AssignmentQuestionsResult holds questions and sections for an assignment
+type AssignmentQuestionsResult struct {
+	Questions []models.Question `json:"questions"`
+	Sections  []models.Section  `json:"sections,omitempty"`
+}
+
+// GetAssignmentQuestions returns the questions and sections for the questionnaire associated with an assignment
+func (s *AssignmentService) GetAssignmentQuestions(ctx context.Context, assignmentID primitive.ObjectID) (*AssignmentQuestionsResult, error) {
 	assignment, err := s.assignmentRepo.GetByID(ctx, assignmentID)
 	if err != nil {
 		return nil, err
@@ -189,7 +195,10 @@ func (s *AssignmentService) GetAssignmentQuestions(ctx context.Context, assignme
 		return nil, fmt.Errorf("questionnaire not found: %w", err)
 	}
 
-	return questionnaire.Questions, nil
+	return &AssignmentQuestionsResult{
+		Questions: questionnaire.Questions,
+		Sections:  questionnaire.Sections,
+	}, nil
 }
 
 // enrichAssignments populates transient fields on assignments (questionnaire title, company name, etc.)
