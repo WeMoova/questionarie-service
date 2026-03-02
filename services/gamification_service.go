@@ -2,7 +2,7 @@ package services
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"questionarie-service/models"
 	"questionarie-service/repository"
 	"time"
@@ -32,13 +32,13 @@ func (s *GamificationService) AwardPointsForCompletion(ctx context.Context, user
 	// Get user metadata for company ID
 	userMeta, err := s.userMetadataRepo.GetByID(ctx, userID)
 	if err != nil {
-		log.Printf("gamification: failed to get user metadata for %s: %v", userID, err)
+		slog.Warn("gamification: failed to get user metadata", "user_id", userID, "error", err)
 		return
 	}
 
 	rules, err := s.repo.GetActivePointRules(ctx)
 	if err != nil {
-		log.Printf("gamification: failed to get point rules: %v", err)
+		slog.Warn("gamification: failed to get point rules", "error", err)
 		return
 	}
 
@@ -70,7 +70,7 @@ func (s *GamificationService) awardPoints(ctx context.Context, userID string, co
 	}
 
 	if err := s.repo.IncrementPoints(ctx, userID, companyID, transaction); err != nil {
-		log.Printf("gamification: failed to award points to %s: %v", userID, err)
+		slog.Warn("gamification: failed to award points", "user_id", userID, "error", err)
 	}
 }
 
@@ -78,13 +78,13 @@ func (s *GamificationService) awardPoints(ctx context.Context, userID string, co
 func (s *GamificationService) UpdateStreak(ctx context.Context, userID string) {
 	userMeta, err := s.userMetadataRepo.GetByID(ctx, userID)
 	if err != nil {
-		log.Printf("gamification: failed to get user metadata for streak: %v", err)
+		slog.Warn("gamification: failed to get user metadata for streak", "error", err)
 		return
 	}
 
 	streak, err := s.repo.GetUserStreak(ctx, userID)
 	if err != nil {
-		log.Printf("gamification: failed to get user streak: %v", err)
+		slog.Warn("gamification: failed to get user streak", "error", err)
 		return
 	}
 
@@ -112,7 +112,7 @@ func (s *GamificationService) UpdateStreak(ctx context.Context, userID string) {
 	}
 
 	if err := s.repo.UpdateStreak(ctx, userID, userMeta.CompanyID, currentStreak, longestStreak); err != nil {
-		log.Printf("gamification: failed to update streak: %v", err)
+		slog.Warn("gamification: failed to update streak", "error", err)
 		return
 	}
 
@@ -132,7 +132,7 @@ func (s *GamificationService) UpdateStreak(ctx context.Context, userID string) {
 func (s *GamificationService) CheckAndAwardBadges(ctx context.Context, userID string) {
 	badges, err := s.repo.GetActiveBadges(ctx)
 	if err != nil {
-		log.Printf("gamification: failed to get badges: %v", err)
+		slog.Warn("gamification: failed to get badges", "error", err)
 		return
 	}
 
@@ -167,7 +167,7 @@ func (s *GamificationService) CheckAndAwardBadges(ctx context.Context, userID st
 
 		if earned {
 			if err := s.repo.AwardBadge(ctx, userID, badge.ID); err != nil {
-				log.Printf("gamification: failed to award badge %s to %s: %v", badge.Name, userID, err)
+				slog.Warn("gamification: failed to award badge", "badge", badge.Name, "user_id", userID, "error", err)
 			}
 		}
 	}
@@ -177,7 +177,7 @@ func (s *GamificationService) CheckAndAwardBadges(ctx context.Context, userID st
 func (s *GamificationService) CheckAndAwardAchievements(ctx context.Context, userID string) {
 	achievements, err := s.repo.GetActiveAchievements(ctx)
 	if err != nil {
-		log.Printf("gamification: failed to get achievements: %v", err)
+		slog.Warn("gamification: failed to get achievements", "error", err)
 		return
 	}
 
@@ -213,7 +213,7 @@ func (s *GamificationService) CheckAndAwardAchievements(ctx context.Context, use
 
 		if earned {
 			if err := s.repo.AwardAchievement(ctx, userID, achievement.ID); err != nil {
-				log.Printf("gamification: failed to award achievement %s to %s: %v", achievement.Name, userID, err)
+				slog.Warn("gamification: failed to award achievement", "achievement", achievement.Name, "user_id", userID, "error", err)
 				continue
 			}
 

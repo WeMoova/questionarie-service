@@ -3,7 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"questionarie-service/models"
 	"questionarie-service/repository"
 
@@ -394,10 +394,10 @@ func (s *AssignmentService) SubmitAssignment(ctx context.Context, assignmentID p
 	if s.evaluationService != nil {
 		evalResult, err := s.evaluationService.EvaluateAssignment(ctx, assignmentID, questionnaire.ID)
 		if err != nil {
-			log.Printf("evaluation error for assignment %s: %v", assignmentID.Hex(), err)
+			slog.Error("evaluation failed", "assignment_id", assignmentID.Hex(), "error", err)
 		} else if evalResult != nil {
 			if err := s.assignmentRepo.SetEvaluationResult(ctx, assignmentID, evalResult); err != nil {
-				log.Printf("failed to store evaluation result for assignment %s: %v", assignmentID.Hex(), err)
+				slog.Error("failed to store evaluation result", "assignment_id", assignmentID.Hex(), "error", err)
 			}
 		}
 	}
@@ -410,7 +410,7 @@ func (s *AssignmentService) SubmitAssignment(ctx context.Context, assignmentID p
 			s.gamificationService.UpdateStreak(bgCtx, userID)
 			s.gamificationService.CheckAndAwardBadges(bgCtx, userID)
 			s.gamificationService.CheckAndAwardAchievements(bgCtx, userID)
-			log.Printf("gamification: awarded points for user %s assignment %s", userID, assignmentID.Hex())
+			slog.Info("gamification completed", "user_id", userID, "assignment_id", assignmentID.Hex())
 		}()
 	}
 

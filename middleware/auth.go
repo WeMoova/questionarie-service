@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -51,7 +51,7 @@ func JWTAuth(next http.Handler) http.Handler {
 
 		claims, err := validateToken(tokenString)
 		if err != nil {
-			log.Printf("JWT validation error: %v", err)
+			slog.Warn("jwt validation failed", "error", err, "path", r.URL.Path)
 			respondError(w, "Invalid or expired token", http.StatusUnauthorized)
 			return
 		}

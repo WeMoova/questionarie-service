@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 )
 
@@ -38,6 +39,7 @@ func RequireRole(roles ...string) func(http.Handler) http.Handler {
 			}
 
 			if !hasRole {
+				slog.Warn("access denied", "user_id", claims.Sub, "roles", claims.Roles, "required", roles, "path", r.URL.Path)
 				http.Error(w, "Forbidden: insufficient permissions", http.StatusForbidden)
 				return
 			}

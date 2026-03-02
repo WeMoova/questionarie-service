@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -17,20 +17,43 @@ import (
 
 	"questionarie-service/db"
 	"questionarie-service/handlers"
+	"questionarie-service/logger"
 	authMiddleware "questionarie-service/middleware"
 	"questionarie-service/repository"
 	"questionarie-service/services"
 	"questionarie-service/storage"
 )
 
+// RequestLogger is a structured JSON request logging middleware that replaces chi's default Logger.
+func RequestLogger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+		next.ServeHTTP(ww, r)
+		slog.Info("request",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", ww.Status(),
+			"duration_ms", time.Since(start).Milliseconds(),
+			"bytes", ww.BytesWritten(),
+			"ip", r.RemoteAddr,
+			"request_id", middleware.GetReqID(r.Context()),
+		)
+	})
+}
+
 func main() {
+	// Initialize structured JSON logging
+	logger.Init()
+
 	// Load environment variables
 	_ = godotenv.Load()
 
 	// Initialize MongoDB connection
 	mongodb, err := db.NewMongoDB()
 	if err != nil {
-		log.Fatalf("Failed to connect to MongoDB: %v", err)
+		slog.Error("mongodb connection failed", "error", err)
+		os.Exit(1)
 	}
 	defer mongodb.Close(context.Background())
 
@@ -38,7 +61,7 @@ func main() {
 	var minioStorage *storage.MinIOStorage
 	minioStorage, err = storage.NewMinIOStorage()
 	if err != nil {
-		log.Printf("WARNING: MinIO not configured, image upload disabled: %v", err)
+		slog.Warn("minio not configured, image upload disabled", "error", err)
 	}
 
 	// Initialize repositories
@@ -52,7 +75,7 @@ func main() {
 
 	// Seed default gamification data
 	if err := gamificationRepo.SeedDefaultData(context.Background()); err != nil {
-		log.Printf("WARNING: Failed to seed gamification defaults: %v", err)
+		slog.Warn("failed to seed gamification defaults", "error", err)
 	}
 
 	// Initialize services
@@ -86,7 +109,7 @@ func main() {
 	// Middleware
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
-	r.Use(middleware.Logger)
+	r.Use(RequestLogger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
 
@@ -399,22 +422,23 @@ func main() {
 	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
-		log.Printf("Server starting on port %s", port)
-		log.Printf("Connected to MongoDB: %s", os.Getenv("MONGODB_DATABASE"))
+		slog.Info("server starting", "port", port, "database", os.Getenv("MONGODB_DATABASE"))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server failed to start: %v", err)
+			slog.Error("server failed to start", "error", err)
+			os.Exit(1)
 		}
 	}()
 
 	<-done
-	log.Println("Server shutting down...")
+	slog.Info("server shutting down")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatalf("Server shutdown failed: %v", err)
+		slog.Error("server shutdown failed", "error", err)
+		os.Exit(1)
 	}
 
-	log.Println("Server exited properly")
+	slog.Info("server exited properly")
 }

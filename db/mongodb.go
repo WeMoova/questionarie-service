@@ -3,7 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"time"
 
@@ -64,7 +64,7 @@ func NewMongoDB() (*MongoDB, error) {
 		return nil, fmt.Errorf("failed to ping MongoDB: %w", err)
 	}
 
-	log.Printf("Successfully connected to MongoDB database: %s", dbName)
+	slog.Info("mongodb connected", "database", dbName)
 
 	return &MongoDB{
 		Client:   client,
