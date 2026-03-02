@@ -1,140 +1,42 @@
-# Questionnaire Service - NOM-035 Management System
+# Questionnaire Service
 
-Sistema completo de gestión de cuestionarios inspirado en NOM-035 (Norma Mexicana de Riesgos Psicosociales) con soporte para múltiples tipos de preguntas, asignación jerárquica por roles, y reportes agregados por empresa.
+Backend API para la plataforma WeMoova — gestión de cuestionarios NOM-035, empresas, asignaciones, respuestas, reportes y gamificación.
 
-## 📋 Tabla de Contenidos
+## Stack
 
-- [Características](#características)
-- [Arquitectura](#arquitectura)
-- [Requisitos](#requisitos)
-- [Instalación](#instalación)
-- [Configuración](#configuración)
-- [Roles y Permisos](#roles-y-permisos)
-- [API Endpoints](#api-endpoints)
-- [Modelos de Datos](#modelos-de-datos)
-- [Flujo de Uso](#flujo-de-uso)
-- [Deployment](#deployment)
+- **Go 1.24** + Chi v5
+- **MongoDB** — base de datos principal
+- **FusionAuth** — autenticación JWT (JWKS)
+- **MinIO** — almacenamiento de imágenes (opcional)
+- **Docker** — multi-stage build
 
-## ✨ Características
+## Requisitos
 
-### Gestión de Cuestionarios
-- ✅ Creación de cuestionarios con múltiples tipos de preguntas
-- ✅ Tipos de preguntas: Opción múltiple, Escala Likert, Texto libre, Sí/No
-- ✅ Activación/desactivación de cuestionarios
-- ✅ Gestión de preguntas embebidas (CRUD completo)
+- Go 1.24+
+- MongoDB 5.0+
+- FusionAuth configurado ([guía](docs/FUSIONAUTH_SETUP.md))
 
-### Gestión de Empresas
-- ✅ CRUD de empresas
-- ✅ Asignación de cuestionarios a empresas con períodos definidos
-- ✅ Gestión de períodos de respuesta
+## Quick Start
 
-### Gestión de Usuarios
-- ✅ Autenticación 100% via FusionAuth
-- ✅ 4 niveles de roles: Super Admin, Company Admin, Supervisor, Employee
-- ✅ Metadata de usuarios vinculada a empresas
-- ✅ Jerarquía de supervisores
-
-### Asignaciones
-- ✅ Asignación de cuestionarios a empleados
-- ✅ Validación de períodos activos
-- ✅ Estados: Pendiente, En Progreso, Completado
-- ✅ Prevención de asignaciones duplicadas
-
-### Respuestas
-- ✅ Guardado incremental de respuestas
-- ✅ Validación de preguntas requeridas
-- ✅ Respuestas embebidas en asignaciones
-- ✅ Historial completo
-
-### Reportes y Métricas
-- ✅ Reportes agregados por empresa (sin datos individuales)
-- ✅ Métricas de completitud detalladas
-- ✅ Estadísticas por departamento
-- ✅ Tiempo promedio de completitud
-- ✅ Overview de empresa con todos los cuestionarios
-
-## 🏗 Arquitectura
-
-### Stack Tecnológico
-- **Lenguaje**: Go 1.21+
-- **Framework Web**: Chi v5
-- **Base de Datos**: MongoDB 5.0+
-- **Autenticación**: FusionAuth (JWT con JWKS)
-- **Deployment**: Docker + Kubernetes
-
-### Patrón de Diseño
-```
-Clean Architecture con capas separadas:
-
-┌─────────────────────────────────────┐
-│         HTTP Handlers               │  ← Entrada HTTP
-├─────────────────────────────────────┤
-│      Middleware (JWT, RBAC)         │  ← Autenticación/Autorización
-├─────────────────────────────────────┤
-│         Services                     │  ← Lógica de negocio
-├─────────────────────────────────────┤
-│         Repositories                 │  ← Acceso a datos
-├─────────────────────────────────────┤
-│         MongoDB                      │  ← Persistencia
-└─────────────────────────────────────┘
-```
-
-### Modelo de Datos MongoDB
-
-**Colecciones:**
-- `companies` - Empresas
-- `questionnaires` - Cuestionarios con preguntas embebidas
-- `company_questionnaires` - Asignaciones de cuestionarios a empresas
-- `user_questionnaire_assignments` - Asignaciones a usuarios con respuestas embebidas
-- `users_metadata` - Metadata de usuarios (vinculación con empresas)
-
-**Ventajas del diseño:**
-- Preguntas embebidas → 1 consulta en vez de JOINs
-- Respuestas embebidas → Histórico completo sin fragmentación
-- Esquema flexible para diferentes tipos de preguntas
-- Agregaciones nativas de MongoDB para reportes
-
-## 📦 Requisitos
-
-- Go 1.21 o superior
-- MongoDB 5.0 o superior
-- FusionAuth configurado (ver [FUSIONAUTH_SETUP.md](docs/FUSIONAUTH_SETUP.md))
-- Docker (opcional, para deployment)
-
-## 🚀 Instalación
-
-### 1. Clonar el repositorio
 ```bash
-git clone <repository-url>
+# Clonar e instalar
+git clone https://github.com/WeMoova/questionarie-service.git
 cd questionarie-service
-```
-
-### 2. Instalar dependencias
-```bash
 go mod download
-```
 
-### 3. Configurar variables de entorno
-```bash
+# Configurar
 cp .env.example .env
 # Editar .env con tus valores
-```
 
-### 4. Crear índices en MongoDB
-```bash
-mongosh <MONGODB_URI> < scripts/init_mongodb_indexes.js
-```
+# Crear índices en MongoDB
+mongosh $MONGODB_URI < scripts/init_mongodb_indexes.js
 
-### 5. Ejecutar el servicio
-```bash
+# Ejecutar
 go run main.go
+# → http://localhost:8080
 ```
 
-El servicio estará disponible en `http://localhost:8080`
-
-## ⚙️ Configuración
-
-### Variables de Entorno
+## Variables de Entorno
 
 ```bash
 # Server
@@ -150,146 +52,226 @@ MONGODB_TIMEOUT=10s
 FUSIONAUTH_URL=https://auth.wemoova.com
 
 # CORS
-CORS_ORIGINS=*
+CORS_ORIGINS=https://services.wemoova.com,https://qa.services.wemoova.com,http://localhost:3000,http://localhost:3001
+
+# MinIO (opcional)
+MINIO_ENDPOINT=
+MINIO_ACCESS_KEY=
+MINIO_SECRET_KEY=
+MINIO_BUCKET=questionnaire-images
+MINIO_PUBLIC_URL=
 ```
 
-### Configuración de FusionAuth
-
-Ver guía completa en [docs/FUSIONAUTH_SETUP.md](docs/FUSIONAUTH_SETUP.md)
-
-**Resumen:**
-1. Crear aplicación en FusionAuth
-2. Configurar roles: `super_admin`, `company_admin`, `supervisor`, `employee`
-3. Configurar JWT issuer y audience
-4. Obtener JWKS endpoint
-
-## 👥 Roles y Permisos
-
-### Super Admin (`super_admin`)
-- ✅ Crear/editar/desactivar cuestionarios
-- ✅ Gestionar preguntas
-- ✅ Crear/editar empresas
-- ✅ Asignar cuestionarios a empresas
-- ✅ Crear/editar user metadata
-- ✅ Acceso a todos los reportes
-
-### Company Admin (`company_admin`)
-- ✅ Ver cuestionarios asignados a SU empresa
-- ✅ Asignar cuestionarios a empleados de SU empresa
-- ✅ Ver reportes de SU empresa
-- ❌ No puede ver otras empresas
-
-### Supervisor (`supervisor`)
-- ✅ Ver cuestionarios de su empresa
-- ✅ Asignar cuestionarios a SU equipo
-- ✅ Ver progreso de SU equipo
-- ✅ Ver reportes de su equipo
-- ❌ No puede asignar a empleados de otros supervisores
-
-### Employee (`employee`)
-- ✅ Ver cuestionarios asignados a SÍ MISMO
-- ✅ Responder cuestionarios
-- ✅ Ver su propio progreso
-- ❌ No puede ver respuestas de otros
-
-## 🔌 API Endpoints
-
-### Swagger UI Documentation
-
-El servicio incluye **Swagger UI** para explorar y probar todos los endpoints de forma interactiva:
+## Arquitectura
 
 ```
-🌐 Swagger UI: http://localhost:8080/questionarie-service/swagger/
-📄 OpenAPI JSON: http://localhost:8080/questionarie-service/swagger/doc.json
+handlers/    → HTTP handlers (request/response)
+services/    → Lógica de negocio
+repository/  → Acceso a MongoDB
+models/      → Structs (bson + json tags)
+middleware/  → JWT auth + RBAC
+utils/       → Helpers (ParseRequestBody, RespondWithSuccess, etc.)
+storage/     → MinIO client
+db/          → MongoDB connection
 ```
 
-**Características de Swagger UI:**
-- ✅ Documentación interactiva de todos los endpoints
-- ✅ Prueba de endpoints directamente desde el navegador
-- ✅ Autenticación con token JWT (botón "Authorize")
-- ✅ Ejemplos de request/response para cada endpoint
-- ✅ Filtrado por tags (Questionnaires, Companies, Assignments, Reports, etc.)
+Patrón Clean Architecture:
 
-**Cómo usar Swagger UI:**
-1. Inicia el servicio: `go run main.go`
-2. Abre en tu navegador: `http://localhost:8080/questionarie-service/swagger/`
-3. Haz clic en "Authorize" e ingresa: `Bearer {tu-jwt-token}`
-4. Explora y prueba los endpoints
-
-### Health Checks
 ```
-GET  /questionarie-service/health        - Health check
-GET  /questionarie-service/ready         - Readiness check (incluye MongoDB)
+HTTP Request → Handler → Service → Repository → MongoDB
+                ↑
+            Middleware (JWT + RBAC)
 ```
 
-### Questionnaires (Super Admin)
-```
-POST   /api/v1/questionnaires                           - Crear cuestionario
-GET    /api/v1/questionnaires                           - Listar cuestionarios
-GET    /api/v1/questionnaires/:id                       - Obtener cuestionario
-PUT    /api/v1/questionnaires/:id                       - Actualizar cuestionario
-DELETE /api/v1/questionnaires/:id                       - Desactivar cuestionario
+## Colecciones MongoDB
 
-POST   /api/v1/questionnaires/:id/questions             - Agregar pregunta
-PUT    /api/v1/questionnaires/:id/questions/:question_id - Actualizar pregunta
-DELETE /api/v1/questionnaires/:id/questions/:question_id - Eliminar pregunta
+| Colección | Propósito |
+|-----------|-----------|
+| `companies` | Empresas con branding |
+| `questionnaires` | Cuestionarios con preguntas embebidas |
+| `company_questionnaires` | Asignación cuestionario → empresa (períodos, estado) |
+| `user_questionnaire_assignments` | Asignación → usuario (respuestas embebidas) |
+| `users_metadata` | Perfiles de usuario vinculados a empresas |
+| `gamification_badges` | Definición de badges |
+| `gamification_achievements` | Definición de logros |
+| `gamification_point_rules` | Reglas de puntuación |
+| `gamification_user_profiles` | Puntos y badges por usuario |
+
+## Roles y Permisos
+
+| Rol | Puede hacer |
+|-----|-------------|
+| `super_admin` | Todo: CRUD cuestionarios, empresas, usuarios. Acceso global |
+| `company_admin` | Gestionar SU empresa: asignar cuestionarios, ver reportes |
+| `supervisor` | Gestionar SU equipo: asignar, ver progreso |
+| `employee` | Responder cuestionarios asignados, ver su progreso |
+
+## API Endpoints
+
+Base path: `/questionarie-service/api/v1`
+
+### Health
+```
+GET  /questionarie-service/health   — Liveness
+GET  /questionarie-service/ready    — Readiness (incluye DB)
 ```
 
-### Companies (Super Admin)
+### Cuestionarios (Super Admin)
 ```
-POST   /api/v1/companies                  - Crear empresa
-GET    /api/v1/companies                  - Listar empresas
-GET    /api/v1/companies/:id              - Obtener empresa
-PUT    /api/v1/companies/:id              - Actualizar empresa
+GET    /questionnaires                              — Listar
+GET    /questionnaires/{id}                         — Obtener (incluye preguntas)
+POST   /questionnaires                              — Crear
+PUT    /questionnaires/{id}                         — Actualizar
+DELETE /questionnaires/{id}                         — Soft delete
+POST   /questionnaires/{id}/duplicate               — Duplicar
+POST   /questionnaires/import                       — Importar desde Excel
+PATCH  /questionnaires/{id}/toggle-status           — Activar/desactivar
+PUT    /questionnaires/{id}/evaluation-config       — Configurar evaluación
 
-POST   /api/v1/companies/:company_id/questionnaires  - Asignar cuestionario a empresa
-GET    /api/v1/companies/:company_id/questionnaires  - Listar cuestionarios de empresa
+POST   /questionnaires/{id}/questions               — Agregar pregunta
+PUT    /questionnaires/{id}/questions/{qid}         — Actualizar pregunta
+DELETE /questionnaires/{id}/questions/{qid}          — Eliminar pregunta
+
+POST   /questionnaires/{id}/sections                — Agregar sección
+PUT    /questionnaires/{id}/sections/{sid}          — Actualizar sección
+DELETE /questionnaires/{id}/sections/{sid}           — Eliminar sección
+```
+
+### Empresas (Super Admin)
+```
+GET    /companies                                   — Listar
+GET    /companies/{id}                              — Obtener
+POST   /companies                                   — Crear
+PUT    /companies/{id}                              — Actualizar
+DELETE /companies/{id}                              — Eliminar
+GET    /my-company                                  — Mi empresa (Company Admin+)
+GET    /public/company-branding/{slug}              — Branding público (sin auth)
+```
+
+### Cuestionarios por empresa
+```
+POST   /companies/{cid}/questionnaires              — Asignar a empresa (Super Admin)
+GET    /companies/{cid}/questionnaires              — Listar (Company Admin+)
+GET    /company-questionnaires/{id}                 — Obtener
+PUT    /company-questionnaires/{id}                 — Actualizar
+DELETE /company-questionnaires/{id}                 — Eliminar
+POST   /company-questionnaires/{id}/activate        — Activar
+POST   /company-questionnaires/{id}/pause           — Pausar
+POST   /company-questionnaires/{id}/close           — Cerrar
+```
+
+### Asignaciones a usuarios (Supervisor+)
+```
+POST   /company-questionnaires/{cqid}/assignments   — Asignar a usuarios
+GET    /company-questionnaires/{cqid}/assignments    — Listar
+DELETE /company-questionnaires/{cqid}/assignments    — Cancelar todas
+POST   /assignments/{id}/cancel                      — Cancelar individual
+POST   /company-questionnaires/{cqid}/assign-all     — Asignar a toda la empresa
+POST   /company-questionnaires/{cqid}/assign-department — Asignar por departamento
+```
+
+### Respuestas (Employee+)
+```
+GET    /my-assignments                               — Mis asignaciones
+GET    /my-questionnaires                            — Mis cuestionarios
+POST   /company-questionnaires/{id}/start            — Iniciar cuestionario
+GET    /assignments/{id}                             — Detalle de asignación
+GET    /assignments/{id}/questions                   — Preguntas de asignación
+POST   /assignments/{id}/responses                   — Guardar respuesta
+PUT    /assignments/{id}/responses                   — Guardar múltiples respuestas
+POST   /assignments/{id}/submit                      — Enviar completado
 ```
 
 ### User Metadata (Super Admin)
 ```
-POST   /api/v1/users/metadata              - Crear metadata de usuario
-GET    /api/v1/users/metadata/:user_id     - Obtener metadata
-PUT    /api/v1/users/metadata/:user_id     - Actualizar metadata
-DELETE /api/v1/users/metadata/:user_id     - Eliminar metadata
-
-GET    /api/v1/companies/:company_id/users - Listar usuarios de empresa
+POST   /users/metadata                               — Crear
+GET    /users/metadata                               — Listar (Supervisor+)
+GET    /users/metadata/{uid}                         — Obtener
+PUT    /users/metadata/{uid}                         — Actualizar
+DELETE /users/metadata/{uid}                         — Eliminar
+GET    /users/me/metadata                            — Mi metadata (todos)
+GET    /companies/{cid}/users                        — Usuarios de empresa
+POST   /users/metadata/resolve-documents             — Resolver por documento
 ```
 
-### Assignments (Company Admin, Supervisor)
+### Reportes (Supervisor+)
 ```
-POST   /api/v1/company-questionnaires/:cq_id/assignments  - Asignar a usuarios
-GET    /api/v1/company-questionnaires/:cq_id/assignments  - Listar asignaciones
-GET    /api/v1/my-company/questionnaires                  - Cuestionarios de mi empresa
-GET    /api/v1/my-team/assignments                        - Asignaciones de mi equipo
-```
-
-### Responses (Employee)
-```
-GET    /api/v1/my-assignments               - Mis cuestionarios asignados
-GET    /api/v1/assignments/:id              - Detalle de asignación
-
-POST   /api/v1/assignments/:id/responses    - Guardar respuesta
-PUT    /api/v1/assignments/:id/responses    - Actualizar múltiples respuestas
-POST   /api/v1/assignments/:id/submit       - Enviar cuestionario completado
+GET    /reports/company-questionnaire/{cqid}/completion       — Completitud
+GET    /reports/company/{cid}/overview                        — Overview empresa
+GET    /reports/company/{cid}/employees-progress              — Progreso empleados
+GET    /reports/assignments/{id}                              — Reporte individual
+GET    /reports/company-questionnaire/{cqid}/answers          — Distribución respuestas
+GET    /reports/company-questionnaire/{cqid}/evaluation-summary — Evaluación
+GET    /reports/company/{cid}/trends                          — Tendencias
+GET    /reports/company-questionnaire/{cqid}/export           — Exportar CSV
 ```
 
-### Reports (Company Admin, Supervisor)
+### Categorías (Super Admin)
 ```
-GET    /api/v1/reports/company-questionnaire/:cq_id/completion  - Métricas de completitud
-GET    /api/v1/reports/company/:company_id/overview             - Overview de empresa
-GET    /api/v1/reports/company/:company_id/employees-progress   - Progreso de empleados
+POST   /questionnaire-categories                     — Crear
+GET    /questionnaire-categories                     — Listar
+GET    /questionnaire-categories/{id}                — Obtener
+PUT    /questionnaire-categories/{id}                — Actualizar
+DELETE /questionnaire-categories/{id}                — Eliminar
+GET    /questionnaire-categories/{id}/questionnaires — Cuestionarios de categoría
 ```
 
-## 📚 Documentación Adicional
+### Gamificación
+```
+# Admin (Super Admin)
+POST   /gamification/badges                          — Crear badge
+GET    /gamification/badges                          — Listar badges
+PUT    /gamification/badges/{id}                     — Actualizar badge
+POST   /gamification/achievements                    — Crear logro
+GET    /gamification/achievements                    — Listar logros
+PUT    /gamification/achievements/{id}               — Actualizar logro
+GET    /gamification/point-rules                     — Listar reglas
+PUT    /gamification/point-rules/{id}                — Actualizar regla
 
-- [FusionAuth Setup Guide](docs/FUSIONAUTH_SETUP.md) - Configuración de autenticación
-- [API Examples](docs/API_EXAMPLES.md) - Ejemplos completos de uso
-- [Postman Collection](postman_collection.json) - Collection para testing
+# Usuario (Employee+)
+GET    /gamification/my-profile                      — Mi perfil gamificado
+GET    /gamification/leaderboard                     — Leaderboard global
 
-## 🐳 Deployment
+# Empresa (Company Admin+)
+GET    /gamification/company/{cid}/leaderboard       — Leaderboard empresa
+GET    /gamification/users/{uid}/profile             — Perfil de usuario
+```
 
-### Docker
+### Imágenes
+```
+POST   /images/upload                                — Subir imagen (Super Admin)
+GET    /images/*                                     — Servir imagen (público)
+DELETE /images                                       — Eliminar imagen (Super Admin)
+```
+
+### Progreso y visibilidad (Supervisor+)
+```
+GET    /company-questionnaires/{cqid}/progress         — Progreso
+GET    /company-questionnaires/{cqid}/pending-users    — Usuarios pendientes
+GET    /company-questionnaires/{cqid}/in-progress-users — En progreso
+GET    /company-questionnaires/{cqid}/completed-users   — Completados
+POST   /company-questionnaires/{cqid}/remind            — Enviar recordatorio
+```
+
+### Dashboard
+```
+GET    /companies/{cid}/dashboard                      — Dashboard empresa
+GET    /questionnaires/{id}/stats                      — Stats de cuestionario
+GET    /questionnaires/{id}/companies                  — Empresas usando cuestionario
+GET    /my-company/questionnaires                      — Cuestionarios de mi empresa
+GET    /my-team/assignments                            — Asignaciones de mi equipo
+```
+
+## Swagger UI
+
+```
+http://localhost:8080/questionarie-service/swagger/
+```
+
+Documentación interactiva de todos los endpoints. Usar "Authorize" con `Bearer {jwt-token}`.
+
+## Docker
+
 ```bash
 docker build -t questionarie-service .
 docker run -p 8080:8080 \
@@ -299,20 +281,34 @@ docker run -p 8080:8080 \
   questionarie-service
 ```
 
-## 🧪 Testing
+Multi-stage build: `golang:1.24-alpine` → `alpine:latest`. Corre como usuario no-root.
+
+## Make
 
 ```bash
-# Unit tests
-go test ./...
-
-# Con coverage
-go test -cover ./...
+make build          # Compilar
+make run            # Ejecutar
+make test           # Tests con coverage
+make docker-build   # Build Docker
+make deps           # Descargar dependencias
 ```
 
-## 📝 License
+## CI/CD
 
-This project is licensed under the MIT License.
+- Push a `main` → deploy a QA automáticamente
+- Release (tag) → deploy a producción
+- Pipeline: build Docker → push a GHCR → actualizar manifiesto en argo-apps → ArgoCD sync
 
----
+## Documentación
 
-**Generado con** [Claude Code](https://claude.com/claude-code)
+- [FusionAuth Setup](docs/FUSIONAUTH_SETUP.md)
+- [API Examples](docs/API_EXAMPLES.md)
+- [Postman Collection](postman_collection.json)
+- [OpenAPI Spec](docs/swagger.json)
+
+## Dominios
+
+| Entorno | URL |
+|---------|-----|
+| QA | `https://qa.services.wemoova.com/questionarie-service` |
+| Producción | `https://services.wemoova.com/questionarie-service` |
