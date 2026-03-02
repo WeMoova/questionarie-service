@@ -253,13 +253,10 @@ func main() {
 				r.Get("/api/v1/questionnaires/{id}/stats", questionnaireHandler.GetQuestionnaireStats)
 				r.Get("/api/v1/questionnaires/{id}/companies", companyHandler.GetQuestionnaireCompanies)
 
-				// Categories (Super Admin only)
+				// Categories (write operations – Super Admin only)
 				r.Post("/api/v1/questionnaire-categories", categoryHandler.CreateCategory)
-				r.Get("/api/v1/questionnaire-categories", categoryHandler.GetCategories)
-				r.Get("/api/v1/questionnaire-categories/{id}", categoryHandler.GetCategoryByID)
 				r.Put("/api/v1/questionnaire-categories/{id}", categoryHandler.UpdateCategory)
 				r.Delete("/api/v1/questionnaire-categories/{id}", categoryHandler.DeleteCategory)
-				r.Get("/api/v1/questionnaire-categories/{id}/questionnaires", categoryHandler.GetCategoryQuestionnaires)
 			})
 
 			// === Gamification Admin CRUD (Super Admin only) ===
@@ -323,6 +320,11 @@ func main() {
 				r.Use(authMiddleware.RequireCompanyAdmin())
 
 				r.Get("/api/v1/my-company", companyHandler.GetMyCompany)
+
+				// Categories (read – Company Admin+)
+				r.Get("/api/v1/questionnaire-categories", categoryHandler.GetCategories)
+				r.Get("/api/v1/questionnaire-categories/{id}", categoryHandler.GetCategoryByID)
+				r.Get("/api/v1/questionnaire-categories/{id}/questionnaires", categoryHandler.GetCategoryQuestionnaires)
 			})
 
 			// === Company Questionnaires (Company Admin+) ===
