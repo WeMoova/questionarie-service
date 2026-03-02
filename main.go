@@ -72,6 +72,7 @@ func main() {
 	userMetadataRepo := repository.NewUserMetadataRepository(mongodb.Database)
 	categoryRepo := repository.NewCategoryRepository(mongodb.Database)
 	gamificationRepo := repository.NewGamificationRepository(mongodb.Database)
+	apiTokenRepo := repository.NewAPITokenRepository(mongodb.Database)
 
 	// Seed default gamification data
 	if err := gamificationRepo.SeedDefaultData(context.Background()); err != nil {
@@ -87,6 +88,7 @@ func main() {
 	assignmentService := services.NewAssignmentService(assignmentRepo, companyQuestionnaireRepo, userMetadataRepo, questionnaireRepo, companyRepo, categoryRepo, gamificationService, evaluationService)
 	reportService := services.NewReportService(assignmentRepo, companyQuestionnaireRepo, userMetadataRepo, questionnaireRepo, companyRepo)
 	categoryService := services.NewCategoryService(categoryRepo, questionnaireRepo)
+	apiTokenService := services.NewAPITokenService(apiTokenRepo, companyRepo)
 
 	// Initialize handlers
 	questionnaireHandler := handlers.NewQuestionnaireHandler(questionnaireService, categoryService)
@@ -97,6 +99,7 @@ func main() {
 	reportHandler := handlers.NewReportHandler(reportService)
 	categoryHandler := handlers.NewCategoryHandler(categoryService)
 	gamificationHandler := handlers.NewGamificationHandler(gamificationService)
+	apiTokenHandler := handlers.NewAPITokenHandler(apiTokenService)
 
 	var imageHandler *handlers.ImageHandler
 	if minioStorage != nil {
@@ -239,6 +242,12 @@ func main() {
 
 				// Assign questionnaire to company
 				r.Post("/api/v1/companies/{company_id}/questionnaires", companyHandler.AssignQuestionnaireToCompany)
+
+				// API Tokens
+				r.Post("/api/v1/companies/{company_id}/api-tokens", apiTokenHandler.GenerateToken)
+				r.Get("/api/v1/companies/{company_id}/api-tokens", apiTokenHandler.ListTokens)
+				r.Delete("/api/v1/api-tokens/{token_id}", apiTokenHandler.RevokeToken)
+				r.Patch("/api/v1/api-tokens/{token_id}/toggle", apiTokenHandler.ToggleToken)
 
 				// Questionnaire stats & companies that use a questionnaire
 				r.Get("/api/v1/questionnaires/{id}/stats", questionnaireHandler.GetQuestionnaireStats)
