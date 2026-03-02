@@ -210,12 +210,12 @@ func (h *CompanyHandler) DeleteCompany(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.DeactivateCompany(r.Context(), id); err != nil {
+	if err := h.service.DeleteCompany(r.Context(), id); err != nil {
 		utils.HandleRepositoryError(w, err)
 		return
 	}
 
-	utils.RespondWithSuccess(w, http.StatusOK, nil, "Company deactivated successfully")
+	utils.RespondWithSuccess(w, http.StatusOK, nil, "Company deleted successfully")
 }
 
 // GetCompanyQuestionnaire handles GET /api/v1/company-questionnaires/:id
