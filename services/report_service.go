@@ -1576,17 +1576,21 @@ func (s *ReportService) sendViaResend(to []string, subject, htmlBody string) err
 
 // buildReportEmailHTML builds an HTML email with inline CSS for the report summary
 func (s *ReportService) buildReportEmailHTML(company *models.Company, metrics *CompletionMetrics, dimSummary *DimensionSummary, customMessage string) string {
-	// Determine branding
-	primaryColor := "#3ba5cc"
+	// Determine branding — prefer secondary color (darker), fallback to primary, then WeMoova teal
+	brandColor := "#3ba5cc"
 	logoHTML := ""
 	if company.Branding != nil {
-		if company.Branding.PrimaryColor != "" {
-			primaryColor = company.Branding.PrimaryColor
+		if company.Branding.SecondaryColor != "" {
+			brandColor = company.Branding.SecondaryColor
+		} else if company.Branding.PrimaryColor != "" {
+			brandColor = company.Branding.PrimaryColor
 		}
 		if company.Branding.Logo != "" {
-			logoHTML = fmt.Sprintf(`<div style="text-align:center;margin-bottom:24px;"><img src="%s" alt="%s" style="max-height:60px;max-width:200px;" /></div>`, company.Branding.Logo, company.Name)
+			// Use absolute URL for email clients; MinIO URLs should already be absolute
+			logoHTML = fmt.Sprintf(`<div style="text-align:center;margin-bottom:16px;"><img src="%s" alt="%s" style="max-height:50px;max-width:180px;display:inline-block;" /></div>`, company.Branding.Logo, company.Name)
 		}
 	}
+	primaryColor := brandColor
 
 	// Completion rate formatted
 	completionRate := fmt.Sprintf("%.1f%%", metrics.CompletionPercentage)
