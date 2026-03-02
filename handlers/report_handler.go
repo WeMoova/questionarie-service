@@ -168,6 +168,90 @@ func (h *ReportHandler) GetEvaluationSummary(w http.ResponseWriter, r *http.Requ
 	utils.RespondWithSuccess(w, http.StatusOK, summary, "")
 }
 
+// GetDimensionSummary handles GET /api/v1/reports/company-questionnaire/:cq_id/dimension-summary
+func (h *ReportHandler) GetDimensionSummary(w http.ResponseWriter, r *http.Request) {
+	cqIDStr := chi.URLParam(r, "cq_id")
+	cqID, err := utils.ValidateObjectID(cqIDStr)
+	if err != nil {
+		utils.BadRequest(w, err.Error())
+		return
+	}
+
+	claims, _ := middleware.GetUserFromContext(r.Context())
+	isSuperAdmin := middleware.IsSuperAdmin(r.Context())
+
+	summary, err := h.service.GetDimensionSummary(r.Context(), cqID, claims.Sub, isSuperAdmin)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, summary, "")
+}
+
+// GetDepartmentDimensions handles GET /api/v1/reports/company-questionnaire/:cq_id/department-dimensions
+func (h *ReportHandler) GetDepartmentDimensions(w http.ResponseWriter, r *http.Request) {
+	cqIDStr := chi.URLParam(r, "cq_id")
+	cqID, err := utils.ValidateObjectID(cqIDStr)
+	if err != nil {
+		utils.BadRequest(w, err.Error())
+		return
+	}
+
+	claims, _ := middleware.GetUserFromContext(r.Context())
+	isSuperAdmin := middleware.IsSuperAdmin(r.Context())
+
+	result, err := h.service.GetDepartmentDimensions(r.Context(), cqID, claims.Sub, isSuperAdmin)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, result, "")
+}
+
+// GetRiskAnalysis handles GET /api/v1/reports/company-questionnaire/:cq_id/risk-analysis
+func (h *ReportHandler) GetRiskAnalysis(w http.ResponseWriter, r *http.Request) {
+	cqIDStr := chi.URLParam(r, "cq_id")
+	cqID, err := utils.ValidateObjectID(cqIDStr)
+	if err != nil {
+		utils.BadRequest(w, err.Error())
+		return
+	}
+
+	claims, _ := middleware.GetUserFromContext(r.Context())
+	isSuperAdmin := middleware.IsSuperAdmin(r.Context())
+
+	result, err := h.service.GetRiskAnalysis(r.Context(), cqID, claims.Sub, isSuperAdmin)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, result, "")
+}
+
+// GetScoreDistribution handles GET /api/v1/reports/company-questionnaire/:cq_id/score-distribution
+func (h *ReportHandler) GetScoreDistribution(w http.ResponseWriter, r *http.Request) {
+	cqIDStr := chi.URLParam(r, "cq_id")
+	cqID, err := utils.ValidateObjectID(cqIDStr)
+	if err != nil {
+		utils.BadRequest(w, err.Error())
+		return
+	}
+
+	claims, _ := middleware.GetUserFromContext(r.Context())
+	isSuperAdmin := middleware.IsSuperAdmin(r.Context())
+
+	result, err := h.service.GetScoreDistribution(r.Context(), cqID, claims.Sub, isSuperAdmin)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, result, "")
+}
+
 // ExportCSV handles GET /api/v1/reports/company-questionnaire/:cq_id/export
 func (h *ReportHandler) ExportCSV(w http.ResponseWriter, r *http.Request) {
 	cqIDStr := chi.URLParam(r, "cq_id")

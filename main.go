@@ -406,6 +406,10 @@ func main() {
 
 				r.Get("/api/v1/reports/company-questionnaire/{cq_id}/answers", reportHandler.GetAnswerDistribution)
 				r.Get("/api/v1/reports/company-questionnaire/{cq_id}/evaluation-summary", reportHandler.GetEvaluationSummary)
+				r.Get("/api/v1/reports/company-questionnaire/{cq_id}/dimension-summary", reportHandler.GetDimensionSummary)
+				r.Get("/api/v1/reports/company-questionnaire/{cq_id}/department-dimensions", reportHandler.GetDepartmentDimensions)
+				r.Get("/api/v1/reports/company-questionnaire/{cq_id}/risk-analysis", reportHandler.GetRiskAnalysis)
+				r.Get("/api/v1/reports/company-questionnaire/{cq_id}/score-distribution", reportHandler.GetScoreDistribution)
 				r.Get("/api/v1/reports/company/{company_id}/trends", reportHandler.GetTrends)
 				r.Get("/api/v1/reports/company-questionnaire/{cq_id}/export", reportHandler.ExportCSV)
 			})

@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
+	"math"
 	"questionarie-service/models"
 	"questionarie-service/repository"
+	"sort"
 	"strconv"
 	"time"
 
@@ -816,9 +818,16 @@ func (s *ReportService) ExportCSV(ctx context.Context, cqID primitive.ObjectID, 
 	w := csv.NewWriter(&buf)
 
 	// Header row
+	hasEval := questionnaire.EvaluationConfig != nil && questionnaire.EvaluationConfig.Enabled
 	header := []string{"row_id", "department", "status", "assigned_at", "completed_at", "time_to_complete_minutes"}
 	for _, q := range questionnaire.Questions {
 		header = append(header, q.QuestionText)
+	}
+	if hasEval {
+		for _, dim := range questionnaire.EvaluationConfig.Dimensions {
+			header = append(header, dim.Code+"_score")
+			header = append(header, dim.Code+"_level")
+		}
 	}
 	w.Write(header)
 
@@ -856,6 +865,26 @@ func (s *ReportService) ExportCSV(ctx context.Context, cqID primitive.ObjectID, 
 			row = append(row, responseMap[q.QuestionID])
 		}
 
+		// Evaluation scores per dimension
+		if hasEval && a.EvaluationResult != nil {
+			scoreMap := make(map[string]models.DimensionScore)
+			for _, ds := range a.EvaluationResult.DimensionScores {
+				scoreMap[ds.DimensionCode] = ds
+			}
+			for _, dim := range questionnaire.EvaluationConfig.Dimensions {
+				if ds, ok := scoreMap[dim.Code]; ok {
+					row = append(row, fmt.Sprintf("%.1f", ds.RawScore))
+					row = append(row, ds.LevelLabel)
+				} else {
+					row = append(row, "", "")
+				}
+			}
+		} else if hasEval {
+			for range questionnaire.EvaluationConfig.Dimensions {
+				row = append(row, "", "")
+			}
+		}
+
 		w.Write(row)
 		rowNum++
 	}
@@ -866,4 +895,597 @@ func (s *ReportService) ExportCSV(ctx context.Context, cqID primitive.ObjectID, 
 	}
 
 	return buf.Bytes(), nil
+}
+
+// --- Advanced Report Endpoints (generic, config-driven) ---
+
+// DimensionSummary holds full dimension-level report data for a company questionnaire
+type DimensionSummary struct {
+	QuestionnaireTitle    string                   `json:"questionnaire_title"`
+	ScoringMethod         string                   `json:"scoring_method"`
+	TotalEvaluated        int                      `json:"total_evaluated"`
+	TotalAssigned         int                      `json:"total_assigned"`
+	Dimensions            []DimensionSummaryStat   `json:"dimensions"`
+	GeneralInterpretation string                   `json:"general_interpretation,omitempty"`
+}
+
+// DimensionSummaryStat holds aggregated statistics for a single dimension
+type DimensionSummaryStat struct {
+	Code        string                  `json:"code"`
+	Name        string                  `json:"name"`
+	Direction   string                  `json:"direction"`
+	MaxScore    int                     `json:"max_score"`
+	AvgScore    float64                 `json:"avg_score"`
+	MedianScore float64                 `json:"median_score"`
+	MinObserved float64                 `json:"min_observed"`
+	MaxObserved float64                 `json:"max_observed"`
+	Thresholds  []ThresholdDistribution `json:"thresholds"`
+}
+
+// ThresholdDistribution holds count/percentage for a single threshold level
+type ThresholdDistribution struct {
+	Level      string  `json:"level"`
+	Label      string  `json:"label"`
+	Min        int     `json:"min"`
+	Max        int     `json:"max"`
+	Color      string  `json:"color"`
+	Count      int     `json:"count"`
+	Percentage float64 `json:"percentage"`
+}
+
+// GetDimensionSummary returns a full dimension-level report for a company questionnaire
+func (s *ReportService) GetDimensionSummary(ctx context.Context, cqID primitive.ObjectID, userID string, isSuperAdmin bool) (*DimensionSummary, error) {
+	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, cqID)
+	if err != nil {
+		return nil, fmt.Errorf("company questionnaire not found: %w", err)
+	}
+
+	if !isSuperAdmin {
+		userMeta, err := s.userMetadataRepo.GetByID(ctx, userID)
+		if err != nil {
+			return nil, fmt.Errorf("user metadata not found: %w", err)
+		}
+		if cq.CompanyID != userMeta.CompanyID {
+			return nil, fmt.Errorf("unauthorized: cannot access reports from other companies")
+		}
+	}
+
+	questionnaire, err := s.questionnaireRepo.GetByID(ctx, cq.QuestionnaireID)
+	if err != nil {
+		return nil, fmt.Errorf("questionnaire not found: %w", err)
+	}
+
+	if questionnaire.EvaluationConfig == nil || !questionnaire.EvaluationConfig.Enabled {
+		return &DimensionSummary{
+			QuestionnaireTitle: questionnaire.Title,
+			TotalEvaluated:     0,
+			Dimensions:         []DimensionSummaryStat{},
+		}, nil
+	}
+
+	evalConfig := questionnaire.EvaluationConfig
+
+	// Get all assignments for total count
+	allAssignments, err := s.assignmentRepo.GetByCompanyQuestionnaireID(ctx, cqID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get assignments: %w", err)
+	}
+
+	// Filter to completed with evaluation results
+	var evaluated []*models.UserQuestionnaireAssignment
+	for _, a := range allAssignments {
+		if a.EvaluationResult != nil && len(a.EvaluationResult.DimensionScores) > 0 {
+			evaluated = append(evaluated, a)
+		}
+	}
+
+	// Build per-dimension accumulators
+	type dimAccum struct {
+		scores []float64
+		levels map[string]int
+	}
+	dimData := make(map[string]*dimAccum)
+	for _, dim := range evalConfig.Dimensions {
+		dimData[dim.Code] = &dimAccum{levels: make(map[string]int)}
+	}
+
+	for _, a := range evaluated {
+		for _, ds := range a.EvaluationResult.DimensionScores {
+			acc, ok := dimData[ds.DimensionCode]
+			if !ok {
+				continue
+			}
+			acc.scores = append(acc.scores, ds.RawScore)
+			acc.levels[ds.Level]++
+		}
+	}
+
+	totalEval := len(evaluated)
+	dimensions := make([]DimensionSummaryStat, 0, len(evalConfig.Dimensions))
+
+	for _, dim := range evalConfig.Dimensions {
+		acc := dimData[dim.Code]
+
+		stat := DimensionSummaryStat{
+			Code:      dim.Code,
+			Name:      dim.Name,
+			Direction: dim.ScoringDirection,
+			MaxScore:  dim.MaxScore,
+		}
+
+		if len(acc.scores) > 0 {
+			sort.Float64s(acc.scores)
+			sum := 0.0
+			for _, v := range acc.scores {
+				sum += v
+			}
+			stat.AvgScore = math.Round(sum/float64(len(acc.scores))*10) / 10
+			stat.MinObserved = acc.scores[0]
+			stat.MaxObserved = acc.scores[len(acc.scores)-1]
+
+			// Median
+			n := len(acc.scores)
+			if n%2 == 0 {
+				stat.MedianScore = (acc.scores[n/2-1] + acc.scores[n/2]) / 2
+			} else {
+				stat.MedianScore = acc.scores[n/2]
+			}
+		}
+
+		// Threshold distribution
+		thresholds := make([]ThresholdDistribution, 0, len(dim.Thresholds))
+		for _, t := range dim.Thresholds {
+			minVal, maxVal := 0, 0
+			if t.MinScore != nil {
+				minVal = *t.MinScore
+			}
+			if t.MaxScore != nil {
+				maxVal = *t.MaxScore
+			}
+			count := acc.levels[t.Level]
+			pct := 0.0
+			if totalEval > 0 {
+				pct = math.Round(float64(count)/float64(totalEval)*1000) / 10
+			}
+			thresholds = append(thresholds, ThresholdDistribution{
+				Level:      t.Level,
+				Label:      t.Label,
+				Min:        minVal,
+				Max:        maxVal,
+				Color:      t.Color,
+				Count:      count,
+				Percentage: pct,
+			})
+		}
+		stat.Thresholds = thresholds
+		dimensions = append(dimensions, stat)
+	}
+
+	return &DimensionSummary{
+		QuestionnaireTitle:    questionnaire.Title,
+		ScoringMethod:         evalConfig.ScoringMethod,
+		TotalEvaluated:        totalEval,
+		TotalAssigned:         len(allAssignments),
+		Dimensions:            dimensions,
+		GeneralInterpretation: evalConfig.GeneralInterpretation,
+	}, nil
+}
+
+// DepartmentDimensions holds dimension breakdown by department
+type DepartmentDimensions struct {
+	Departments []DepartmentDimensionStat `json:"departments"`
+}
+
+// DepartmentDimensionStat holds dimension data for a single department
+type DepartmentDimensionStat struct {
+	Department    string                       `json:"department"`
+	EmployeeCount int                          `json:"employee_count"`
+	Evaluated     int                          `json:"evaluated"`
+	Dimensions    []DepartmentDimensionDetail  `json:"dimensions"`
+}
+
+// DepartmentDimensionDetail holds a dimension's stats within a department
+type DepartmentDimensionDetail struct {
+	Code              string         `json:"code"`
+	Name              string         `json:"name"`
+	AvgScore          float64        `json:"avg_score"`
+	PredominantLevel  string         `json:"predominant_level"`
+	PredominantColor  string         `json:"predominant_color"`
+	LevelDistribution map[string]int `json:"level_distribution"`
+}
+
+// GetDepartmentDimensions returns dimension breakdown by department
+func (s *ReportService) GetDepartmentDimensions(ctx context.Context, cqID primitive.ObjectID, userID string, isSuperAdmin bool) (*DepartmentDimensions, error) {
+	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, cqID)
+	if err != nil {
+		return nil, fmt.Errorf("company questionnaire not found: %w", err)
+	}
+
+	if !isSuperAdmin {
+		userMeta, err := s.userMetadataRepo.GetByID(ctx, userID)
+		if err != nil {
+			return nil, fmt.Errorf("user metadata not found: %w", err)
+		}
+		if cq.CompanyID != userMeta.CompanyID {
+			return nil, fmt.Errorf("unauthorized: cannot access reports from other companies")
+		}
+	}
+
+	questionnaire, err := s.questionnaireRepo.GetByID(ctx, cq.QuestionnaireID)
+	if err != nil {
+		return nil, fmt.Errorf("questionnaire not found: %w", err)
+	}
+
+	if questionnaire.EvaluationConfig == nil || !questionnaire.EvaluationConfig.Enabled {
+		return &DepartmentDimensions{Departments: []DepartmentDimensionStat{}}, nil
+	}
+
+	evalConfig := questionnaire.EvaluationConfig
+
+	// Get user departments
+	users, err := s.userMetadataRepo.GetByCompanyID(ctx, cq.CompanyID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get users: %w", err)
+	}
+	userDept := make(map[string]string)
+	for _, u := range users {
+		dept := u.Department
+		if dept == "" {
+			dept = "Sin departamento"
+		}
+		userDept[u.ID] = dept
+	}
+
+	// Get evaluated assignments
+	allAssignments, err := s.assignmentRepo.GetByCompanyQuestionnaireID(ctx, cqID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get assignments: %w", err)
+	}
+
+	// Accumulate per department per dimension
+	type dimAccum struct {
+		sum   float64
+		count int
+		levels map[string]int
+	}
+	type deptAccum struct {
+		totalAssigned int
+		evaluated     int
+		dims          map[string]*dimAccum
+	}
+	deptData := make(map[string]*deptAccum)
+
+	for _, a := range allAssignments {
+		dept := userDept[a.UserID]
+		if dept == "" {
+			dept = "Sin departamento"
+		}
+		if _, ok := deptData[dept]; !ok {
+			dims := make(map[string]*dimAccum)
+			for _, dim := range evalConfig.Dimensions {
+				dims[dim.Code] = &dimAccum{levels: make(map[string]int)}
+			}
+			deptData[dept] = &deptAccum{dims: dims}
+		}
+		deptData[dept].totalAssigned++
+
+		if a.EvaluationResult == nil || len(a.EvaluationResult.DimensionScores) == 0 {
+			continue
+		}
+		deptData[dept].evaluated++
+
+		for _, ds := range a.EvaluationResult.DimensionScores {
+			acc, ok := deptData[dept].dims[ds.DimensionCode]
+			if !ok {
+				continue
+			}
+			acc.sum += ds.RawScore
+			acc.count++
+			acc.levels[ds.Level]++
+		}
+	}
+
+	// Build dimension config lookup for colors
+	dimConfigMap := make(map[string]models.DimensionConfig)
+	for _, dim := range evalConfig.Dimensions {
+		dimConfigMap[dim.Code] = dim
+	}
+
+	departments := make([]DepartmentDimensionStat, 0, len(deptData))
+	for dept, da := range deptData {
+		dimDetails := make([]DepartmentDimensionDetail, 0, len(evalConfig.Dimensions))
+		for _, dim := range evalConfig.Dimensions {
+			acc := da.dims[dim.Code]
+			avg := 0.0
+			if acc.count > 0 {
+				avg = math.Round(acc.sum/float64(acc.count)*10) / 10
+			}
+
+			// Find predominant level
+			predominantLevel := ""
+			predominantColor := ""
+			maxCount := 0
+			for lvl, cnt := range acc.levels {
+				if cnt > maxCount {
+					maxCount = cnt
+					predominantLevel = lvl
+				}
+			}
+			// Get color from thresholds
+			for _, t := range dim.Thresholds {
+				if t.Level == predominantLevel {
+					predominantColor = t.Color
+					break
+				}
+			}
+
+			dimDetails = append(dimDetails, DepartmentDimensionDetail{
+				Code:              dim.Code,
+				Name:              dim.Name,
+				AvgScore:          avg,
+				PredominantLevel:  predominantLevel,
+				PredominantColor:  predominantColor,
+				LevelDistribution: acc.levels,
+			})
+		}
+
+		departments = append(departments, DepartmentDimensionStat{
+			Department:    dept,
+			EmployeeCount: da.totalAssigned,
+			Evaluated:     da.evaluated,
+			Dimensions:    dimDetails,
+		})
+	}
+
+	// Sort departments alphabetically
+	sort.Slice(departments, func(i, j int) bool {
+		return departments[i].Department < departments[j].Department
+	})
+
+	return &DepartmentDimensions{Departments: departments}, nil
+}
+
+// RiskAnalysisResult holds risk profile analysis for a company questionnaire
+type RiskAnalysisResult struct {
+	RiskProfiles []RiskProfileResult `json:"risk_profiles"`
+}
+
+// RiskProfileResult holds the result of evaluating a single risk profile
+type RiskProfileResult struct {
+	Name               string  `json:"name"`
+	Description        string  `json:"description"`
+	Severity           string  `json:"severity"`
+	Color              string  `json:"color"`
+	AffectedCount      int     `json:"affected_count"`
+	AffectedPercentage float64 `json:"affected_percentage"`
+}
+
+// GetRiskAnalysis evaluates risk profiles defined in the questionnaire's config
+func (s *ReportService) GetRiskAnalysis(ctx context.Context, cqID primitive.ObjectID, userID string, isSuperAdmin bool) (*RiskAnalysisResult, error) {
+	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, cqID)
+	if err != nil {
+		return nil, fmt.Errorf("company questionnaire not found: %w", err)
+	}
+
+	if !isSuperAdmin {
+		userMeta, err := s.userMetadataRepo.GetByID(ctx, userID)
+		if err != nil {
+			return nil, fmt.Errorf("user metadata not found: %w", err)
+		}
+		if cq.CompanyID != userMeta.CompanyID {
+			return nil, fmt.Errorf("unauthorized: cannot access reports from other companies")
+		}
+	}
+
+	questionnaire, err := s.questionnaireRepo.GetByID(ctx, cq.QuestionnaireID)
+	if err != nil {
+		return nil, fmt.Errorf("questionnaire not found: %w", err)
+	}
+
+	if questionnaire.EvaluationConfig == nil || !questionnaire.EvaluationConfig.Enabled || len(questionnaire.EvaluationConfig.RiskProfiles) == 0 {
+		return &RiskAnalysisResult{RiskProfiles: []RiskProfileResult{}}, nil
+	}
+
+	// Get evaluated assignments
+	allAssignments, err := s.assignmentRepo.GetByCompanyQuestionnaireID(ctx, cqID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get assignments: %w", err)
+	}
+
+	var evaluated []*models.UserQuestionnaireAssignment
+	for _, a := range allAssignments {
+		if a.EvaluationResult != nil && len(a.EvaluationResult.DimensionScores) > 0 {
+			evaluated = append(evaluated, a)
+		}
+	}
+
+	totalEval := len(evaluated)
+	results := make([]RiskProfileResult, 0, len(questionnaire.EvaluationConfig.RiskProfiles))
+
+	for _, rp := range questionnaire.EvaluationConfig.RiskProfiles {
+		affected := 0
+		for _, a := range evaluated {
+			if matchesRiskProfile(a.EvaluationResult, rp) {
+				affected++
+			}
+		}
+
+		pct := 0.0
+		if totalEval > 0 {
+			pct = math.Round(float64(affected)/float64(totalEval)*1000) / 10
+		}
+
+		results = append(results, RiskProfileResult{
+			Name:               rp.Name,
+			Description:        rp.Description,
+			Severity:           rp.Severity,
+			Color:              rp.Color,
+			AffectedCount:      affected,
+			AffectedPercentage: pct,
+		})
+	}
+
+	return &RiskAnalysisResult{RiskProfiles: results}, nil
+}
+
+// matchesRiskProfile checks if an evaluation result matches a risk profile's conditions
+func matchesRiskProfile(result *models.EvaluationResult, rp models.RiskProfile) bool {
+	// Build lookup: dimension_code → DimensionScore
+	scoreMap := make(map[string]models.DimensionScore)
+	for _, ds := range result.DimensionScores {
+		scoreMap[ds.DimensionCode] = ds
+	}
+
+	matchCount := 0
+	for _, cond := range rp.Conditions {
+		ds, ok := scoreMap[cond.DimensionCode]
+		if !ok {
+			if rp.Logic == "all" {
+				return false
+			}
+			continue
+		}
+
+		condMet := false
+		switch cond.Operator {
+		case "level_in":
+			for _, val := range cond.Values {
+				if ds.Level == val {
+					condMet = true
+					break
+				}
+			}
+		case "score_gt":
+			if len(cond.Values) > 0 {
+				if threshold, err := strconv.ParseFloat(cond.Values[0], 64); err == nil {
+					condMet = ds.RawScore > threshold
+				}
+			}
+		case "score_lt":
+			if len(cond.Values) > 0 {
+				if threshold, err := strconv.ParseFloat(cond.Values[0], 64); err == nil {
+					condMet = ds.RawScore < threshold
+				}
+			}
+		}
+
+		if condMet {
+			matchCount++
+		}
+		if !condMet && rp.Logic == "all" {
+			return false
+		}
+	}
+
+	if rp.Logic == "all" {
+		return matchCount == len(rp.Conditions)
+	}
+	// "any" logic
+	return matchCount > 0
+}
+
+// ScoreDistribution holds histogram data for scores across dimensions
+type ScoreDistribution struct {
+	Dimensions []DimensionHistogram `json:"dimensions"`
+}
+
+// DimensionHistogram holds histogram buckets for a single dimension
+type DimensionHistogram struct {
+	Code     string            `json:"code"`
+	Name     string            `json:"name"`
+	MaxScore int               `json:"max_score"`
+	Buckets  []HistogramBucket `json:"buckets"`
+}
+
+// HistogramBucket represents a single bucket in the histogram
+type HistogramBucket struct {
+	RangeStart int `json:"range_start"`
+	RangeEnd   int `json:"range_end"`
+	Count      int `json:"count"`
+}
+
+// GetScoreDistribution returns score histograms per dimension
+func (s *ReportService) GetScoreDistribution(ctx context.Context, cqID primitive.ObjectID, userID string, isSuperAdmin bool) (*ScoreDistribution, error) {
+	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, cqID)
+	if err != nil {
+		return nil, fmt.Errorf("company questionnaire not found: %w", err)
+	}
+
+	if !isSuperAdmin {
+		userMeta, err := s.userMetadataRepo.GetByID(ctx, userID)
+		if err != nil {
+			return nil, fmt.Errorf("user metadata not found: %w", err)
+		}
+		if cq.CompanyID != userMeta.CompanyID {
+			return nil, fmt.Errorf("unauthorized: cannot access reports from other companies")
+		}
+	}
+
+	questionnaire, err := s.questionnaireRepo.GetByID(ctx, cq.QuestionnaireID)
+	if err != nil {
+		return nil, fmt.Errorf("questionnaire not found: %w", err)
+	}
+
+	if questionnaire.EvaluationConfig == nil || !questionnaire.EvaluationConfig.Enabled {
+		return &ScoreDistribution{Dimensions: []DimensionHistogram{}}, nil
+	}
+
+	evalConfig := questionnaire.EvaluationConfig
+
+	allAssignments, err := s.assignmentRepo.GetByCompanyQuestionnaireID(ctx, cqID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get assignments: %w", err)
+	}
+
+	// Collect scores per dimension
+	dimScores := make(map[string][]float64)
+	for _, dim := range evalConfig.Dimensions {
+		dimScores[dim.Code] = []float64{}
+	}
+	for _, a := range allAssignments {
+		if a.EvaluationResult == nil {
+			continue
+		}
+		for _, ds := range a.EvaluationResult.DimensionScores {
+			dimScores[ds.DimensionCode] = append(dimScores[ds.DimensionCode], ds.RawScore)
+		}
+	}
+
+	dimensions := make([]DimensionHistogram, 0, len(evalConfig.Dimensions))
+	for _, dim := range evalConfig.Dimensions {
+		scores := dimScores[dim.Code]
+
+		// Use thresholds as bucket boundaries for meaningful distribution
+		buckets := make([]HistogramBucket, 0, len(dim.Thresholds))
+		for _, t := range dim.Thresholds {
+			minVal, maxVal := 0, dim.MaxScore
+			if t.MinScore != nil {
+				minVal = *t.MinScore
+			}
+			if t.MaxScore != nil {
+				maxVal = *t.MaxScore
+			}
+			count := 0
+			for _, sc := range scores {
+				intScore := int(sc)
+				if intScore >= minVal && intScore <= maxVal {
+					count++
+				}
+			}
+			buckets = append(buckets, HistogramBucket{
+				RangeStart: minVal,
+				RangeEnd:   maxVal,
+				Count:      count,
+			})
+		}
+
+		dimensions = append(dimensions, DimensionHistogram{
+			Code:     dim.Code,
+			Name:     dim.Name,
+			MaxScore: dim.MaxScore,
+			Buckets:  buckets,
+		})
+	}
+
+	return &ScoreDistribution{Dimensions: dimensions}, nil
 }

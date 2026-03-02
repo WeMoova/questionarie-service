@@ -35,11 +35,29 @@ type DimensionConfig struct {
 	Thresholds       []ScoreThreshold `bson:"thresholds" json:"thresholds"`
 }
 
+// RiskCondition defines a single condition for evaluating a risk profile
+type RiskCondition struct {
+	DimensionCode string   `bson:"dimension_code" json:"dimension_code"`
+	Operator      string   `bson:"operator" json:"operator"` // "level_in", "score_gt", "score_lt"
+	Values        []string `bson:"values" json:"values"`
+}
+
+// RiskProfile defines a configurable risk pattern across multiple dimensions
+type RiskProfile struct {
+	Name        string          `bson:"name" json:"name"`
+	Description string          `bson:"description" json:"description"`
+	Severity    string          `bson:"severity" json:"severity"` // "critical", "warning", "info"
+	Color       string          `bson:"color" json:"color"`
+	Logic       string          `bson:"logic" json:"logic"` // "all" (AND) or "any" (OR)
+	Conditions  []RiskCondition `bson:"conditions" json:"conditions"`
+}
+
 // EvaluationConfig holds the scoring methodology for a questionnaire
 type EvaluationConfig struct {
 	Enabled               bool              `bson:"enabled" json:"enabled"`
 	ScoringMethod         string            `bson:"scoring_method" json:"scoring_method"` // "sum" or "average"
 	Dimensions            []DimensionConfig `bson:"dimensions" json:"dimensions"`
+	RiskProfiles          []RiskProfile     `bson:"risk_profiles,omitempty" json:"risk_profiles,omitempty"`
 	GeneralInterpretation string            `bson:"general_interpretation,omitempty" json:"general_interpretation,omitempty"`
 }
 
