@@ -14,6 +14,7 @@ import (
 	"questionarie-service/repository"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -1586,8 +1587,17 @@ func (s *ReportService) buildReportEmailHTML(company *models.Company, metrics *C
 			brandColor = company.Branding.PrimaryColor
 		}
 		if company.Branding.Logo != "" {
-			// Use absolute URL for email clients; MinIO URLs should already be absolute
-			logoHTML = fmt.Sprintf(`<div style="text-align:center;margin-bottom:16px;"><img src="%s" alt="%s" style="max-height:50px;max-width:180px;display:inline-block;" /></div>`, company.Branding.Logo, company.Name)
+			// Build absolute public URL for the logo so email clients (Gmail, etc.) can render it
+			baseURL := "https://services.wemoova.com/questionarie-service"
+			if env := os.Getenv("ENV"); env != "production" {
+				baseURL = "https://qa.services.wemoova.com/questionarie-service"
+			}
+			logoURL := company.Branding.Logo
+			// If it's a relative path (not http), prepend the public image endpoint
+			if !strings.HasPrefix(logoURL, "http") {
+				logoURL = fmt.Sprintf("%s/api/v1/images/%s", baseURL, logoURL)
+			}
+			logoHTML = fmt.Sprintf(`<div style="text-align:center;margin-bottom:16px;"><img src="%s" alt="%s" style="max-height:50px;max-width:180px;display:inline-block;" /></div>`, logoURL, company.Name)
 		}
 	}
 	primaryColor := brandColor
