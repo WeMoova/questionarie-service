@@ -27,10 +27,11 @@ func NewCompanyHandler(service *services.CompanyService) *CompanyHandler {
 // CreateCompany handles POST /api/v1/companies
 func (h *CompanyHandler) CreateCompany(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name         string              `json:"name"`
-		IsActive     *bool               `json:"is_active"`
-		Branding     *models.Branding    `json:"branding"`
-		CustomDomain *models.CustomDomain `json:"custom_domain"`
+		Name         string                 `json:"name"`
+		IsActive     *bool                  `json:"is_active"`
+		Branding     *models.Branding       `json:"branding"`
+		CustomDomain *models.CustomDomain   `json:"custom_domain"`
+		Settings     *models.CompanySettings `json:"settings"`
 	}
 
 	if err := utils.ParseRequestBody(r, &req); err != nil {
@@ -44,7 +45,7 @@ func (h *CompanyHandler) CreateCompany(w http.ResponseWriter, r *http.Request) {
 		isActive = *req.IsActive
 	}
 
-	company, err := h.service.CreateCompany(r.Context(), req.Name, isActive, req.Branding, req.CustomDomain)
+	company, err := h.service.CreateCompany(r.Context(), req.Name, isActive, req.Branding, req.CustomDomain, req.Settings)
 	if err != nil {
 		utils.HandleRepositoryError(w, err)
 		return
@@ -113,10 +114,11 @@ func (h *CompanyHandler) UpdateCompany(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Name         string              `json:"name"`
-		IsActive     *bool               `json:"is_active"`
-		Branding     *models.Branding    `json:"branding"`
-		CustomDomain *models.CustomDomain `json:"custom_domain"`
+		Name         string                 `json:"name"`
+		IsActive     *bool                  `json:"is_active"`
+		Branding     *models.Branding       `json:"branding"`
+		CustomDomain *models.CustomDomain   `json:"custom_domain"`
+		Settings     *models.CompanySettings `json:"settings"`
 	}
 
 	if err := utils.ParseRequestBody(r, &req); err != nil {
@@ -124,7 +126,7 @@ func (h *CompanyHandler) UpdateCompany(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.UpdateCompany(r.Context(), id, req.Name, req.IsActive, req.Branding, req.CustomDomain); err != nil {
+	if err := h.service.UpdateCompany(r.Context(), id, req.Name, req.IsActive, req.Branding, req.CustomDomain, req.Settings); err != nil {
 		utils.HandleRepositoryError(w, err)
 		return
 	}

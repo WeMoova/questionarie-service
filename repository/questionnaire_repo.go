@@ -15,9 +15,10 @@ import (
 
 // QuestionnaireFilter holds optional filters for listing questionnaires
 type QuestionnaireFilter struct {
-	Search     string              // searches in title and questions.question_text
-	CategoryID *primitive.ObjectID // filter by category_id
-	IsActive   *bool              // filter by is_active (nil = all, true = active only, false = inactive only)
+	Search     string               // searches in title and questions.question_text
+	CategoryID *primitive.ObjectID  // filter by category_id
+	IsActive   *bool               // filter by is_active (nil = all, true = active only, false = inactive only)
+	IDs        []primitive.ObjectID // restrict to specific questionnaire IDs (company_admin "assigned" visibility)
 }
 
 // QuestionnaireRepository handles questionnaire data operations
@@ -62,6 +63,9 @@ func buildFilter(f QuestionnaireFilter) bson.M {
 	}
 	if f.CategoryID != nil {
 		filter["category_id"] = *f.CategoryID
+	}
+	if f.IDs != nil {
+		filter["_id"] = bson.M{"$in": f.IDs}
 	}
 	if f.Search != "" {
 		escaped := regexp.QuoteMeta(f.Search)

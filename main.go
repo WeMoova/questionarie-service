@@ -91,7 +91,7 @@ func main() {
 	apiTokenService := services.NewAPITokenService(apiTokenRepo, companyRepo)
 
 	// Initialize handlers
-	questionnaireHandler := handlers.NewQuestionnaireHandler(questionnaireService, categoryService)
+	questionnaireHandler := handlers.NewQuestionnaireHandler(questionnaireService, categoryService, companyService)
 	companyHandler := handlers.NewCompanyHandler(companyService)
 	userMetadataHandler := handlers.NewUserMetadataHandler(userMetadataService)
 	assignmentHandler := handlers.NewAssignmentHandler(assignmentService)

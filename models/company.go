@@ -25,6 +25,14 @@ type CustomDomain struct {
 	IsVerified   bool   `bson:"is_verified" json:"is_verified"`
 }
 
+// CompanySettings holds configurable behavior for a company
+type CompanySettings struct {
+	// QuestionnaireVisibility controls what the company_admin sees:
+	// "all" = full questionnaire catalog (default)
+	// "assigned" = only questionnaires assigned to their company
+	QuestionnaireVisibility string `bson:"questionnaire_visibility" json:"questionnaire_visibility"`
+}
+
 // Company represents a company entity
 type Company struct {
 	ID           primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
@@ -32,6 +40,7 @@ type Company struct {
 	IsActive     bool               `bson:"is_active" json:"is_active"`
 	Branding     *Branding          `bson:"branding,omitempty" json:"branding,omitempty"`
 	CustomDomain *CustomDomain      `bson:"custom_domain,omitempty" json:"custom_domain,omitempty"`
+	Settings     *CompanySettings   `bson:"settings,omitempty" json:"settings,omitempty"`
 	CreatedAt    time.Time          `bson:"created_at" json:"created_at"`
 	UpdatedAt    time.Time          `bson:"updated_at" json:"updated_at"`
 	// Transient field — not persisted, populated by service layer

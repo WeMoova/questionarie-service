@@ -17,13 +17,15 @@ import (
 type QuestionnaireHandler struct {
 	service         *services.QuestionnaireService
 	categoryService *services.CategoryService
+	companyService  *services.CompanyService
 }
 
 // NewQuestionnaireHandler creates a new QuestionnaireHandler
-func NewQuestionnaireHandler(service *services.QuestionnaireService, categoryService *services.CategoryService) *QuestionnaireHandler {
+func NewQuestionnaireHandler(service *services.QuestionnaireService, categoryService *services.CategoryService, companyService *services.CompanyService) *QuestionnaireHandler {
 	return &QuestionnaireHandler{
 		service:         service,
 		categoryService: categoryService,
+		companyService:  companyService,
 	}
 }
 
@@ -83,6 +85,29 @@ func (h *QuestionnaireHandler) GetQuestionnaires(w http.ResponseWriter, r *http.
 			return
 		}
 		filter.CategoryID = &id
+	}
+
+	// For company_admin with "assigned" visibility, only return assigned questionnaires
+	if !middleware.IsSuperAdmin(r.Context()) && h.companyService != nil {
+		claims, _ := middleware.GetUserFromContext(r.Context())
+		if claims != nil {
+			company, err := h.companyService.GetMyCompany(r.Context(), claims.Sub)
+			if err == nil && company != nil &&
+				company.Settings != nil &&
+				company.Settings.QuestionnaireVisibility == "assigned" {
+				// Get questionnaire IDs assigned to this company
+				cqs, err := h.companyService.GetCompanyQuestionnaires(r.Context(), company.ID, false)
+				if err != nil {
+					utils.HandleRepositoryError(w, err)
+					return
+				}
+				qIDs := make([]primitive.ObjectID, 0, len(cqs))
+				for _, cq := range cqs {
+					qIDs = append(qIDs, cq.QuestionnaireID)
+				}
+				filter.IDs = qIDs
+			}
+		}
 	}
 
 	questionnaires, _, err := h.service.GetAllQuestionnaires(r.Context(), page, pageSize, filter)

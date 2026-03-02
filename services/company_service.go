@@ -97,7 +97,7 @@ func validateBranding(b *models.Branding) error {
 }
 
 // CreateCompany creates a new company (Super Admin only)
-func (s *CompanyService) CreateCompany(ctx context.Context, name string, isActive bool, branding *models.Branding, customDomain *models.CustomDomain) (*models.Company, error) {
+func (s *CompanyService) CreateCompany(ctx context.Context, name string, isActive bool, branding *models.Branding, customDomain *models.CustomDomain, settings *models.CompanySettings) (*models.Company, error) {
 	if name == "" {
 		return nil, fmt.Errorf("company name is required")
 	}
@@ -123,6 +123,7 @@ func (s *CompanyService) CreateCompany(ctx context.Context, name string, isActiv
 	company.IsActive = isActive
 	company.Branding = branding
 	company.CustomDomain = customDomain
+	company.Settings = settings
 
 	if err := s.companyRepo.Create(ctx, company); err != nil {
 		return nil, fmt.Errorf("failed to create company: %w", err)
@@ -173,7 +174,7 @@ func (s *CompanyService) GetAllCompanies(ctx context.Context, page, pageSize int
 }
 
 // UpdateCompany updates a company
-func (s *CompanyService) UpdateCompany(ctx context.Context, id primitive.ObjectID, name string, isActive *bool, branding *models.Branding, customDomain *models.CustomDomain) error {
+func (s *CompanyService) UpdateCompany(ctx context.Context, id primitive.ObjectID, name string, isActive *bool, branding *models.Branding, customDomain *models.CustomDomain, settings *models.CompanySettings) error {
 	company, err := s.companyRepo.GetByID(ctx, id)
 	if err != nil {
 		return err
@@ -202,6 +203,9 @@ func (s *CompanyService) UpdateCompany(ctx context.Context, id primitive.ObjectI
 			}
 		}
 		company.CustomDomain = customDomain
+	}
+	if settings != nil {
+		company.Settings = settings
 	}
 	company.UpdatedAt = time.Now()
 
