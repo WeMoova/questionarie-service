@@ -317,9 +317,10 @@ func (h *ReportHandler) SendReportEmail(w http.ResponseWriter, r *http.Request) 
 	defer r.Body.Close()
 
 	var req struct {
-		Recipients    []string `json:"recipients"`
-		Subject       string   `json:"subject"`
-		CustomMessage string   `json:"custom_message"`
+		Recipients    []string          `json:"recipients"`
+		Subject       string            `json:"subject"`
+		CustomMessage string            `json:"custom_message"`
+		Attachments   []services.EmailAttachment `json:"attachments,omitempty"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
 		utils.BadRequest(w, "invalid JSON format")
@@ -334,7 +335,7 @@ func (h *ReportHandler) SendReportEmail(w http.ResponseWriter, r *http.Request) 
 	claims, _ := middleware.GetUserFromContext(r.Context())
 	isSuperAdmin := middleware.IsSuperAdmin(r.Context())
 
-	if err := h.service.SendReportEmail(r.Context(), cqID, claims.Sub, isSuperAdmin, req.Recipients, req.Subject, req.CustomMessage); err != nil {
+	if err := h.service.SendReportEmail(r.Context(), cqID, claims.Sub, isSuperAdmin, req.Recipients, req.Subject, req.CustomMessage, req.Attachments); err != nil {
 		utils.HandleRepositoryError(w, err)
 		return
 	}

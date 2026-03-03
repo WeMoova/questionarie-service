@@ -20,6 +20,13 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
+// EmailAttachment represents a file attachment for email sending via Resend API
+type EmailAttachment struct {
+	Filename    string `json:"filename"`
+	Content     string `json:"content"`      // base64-encoded
+	ContentType string `json:"content_type"`
+}
+
 // ReportService handles business logic for reports and analytics
 type ReportService struct {
 	assignmentRepo           *repository.AssignmentRepository
@@ -1611,7 +1618,7 @@ func (s *ReportService) GetScoreDistribution(ctx context.Context, cqID primitive
 }
 
 // SendReportEmail sends a report summary email for a company questionnaire via Resend
-func (s *ReportService) SendReportEmail(ctx context.Context, cqID primitive.ObjectID, userID string, isSuperAdmin bool, recipients []string, subject string, customMessage string) error {
+func (s *ReportService) SendReportEmail(ctx context.Context, cqID primitive.ObjectID, userID string, isSuperAdmin bool, recipients []string, subject string, customMessage string, attachments []EmailAttachment) error {
 	// Get company questionnaire
 	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, cqID)
 	if err != nil {
@@ -1655,11 +1662,11 @@ func (s *ReportService) SendReportEmail(ctx context.Context, cqID primitive.Obje
 		subject = fmt.Sprintf("Reporte de %s", metrics.QuestionnaireTitle)
 	}
 
-	return s.sendViaResend(recipients, subject, htmlBody)
+	return s.sendViaResend(recipients, subject, htmlBody, attachments)
 }
 
 // sendViaResend sends an email via the Resend HTTP API
-func (s *ReportService) sendViaResend(to []string, subject, htmlBody string) error {
+func (s *ReportService) sendViaResend(to []string, subject, htmlBody string, attachments []EmailAttachment) error {
 	apiKey := os.Getenv("RESEND_API_KEY")
 	if apiKey == "" {
 		return fmt.Errorf("RESEND_API_KEY not configured")
@@ -1671,12 +1678,15 @@ func (s *ReportService) sendViaResend(to []string, subject, htmlBody string) err
 		"subject": subject,
 		"html":    htmlBody,
 	}
+	if len(attachments) > 0 {
+		payload["attachments"] = attachments
+	}
 	body, _ := json.Marshal(payload)
 	req, _ := http.NewRequest("POST", "https://api.resend.com/emails", bytes.NewBuffer(body))
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send email: %w", err)
