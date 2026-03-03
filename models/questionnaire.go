@@ -33,6 +33,7 @@ type DimensionConfig struct {
 	ScoringDirection string           `bson:"scoring_direction" json:"scoring_direction"` // "direct" or "inverse"
 	MaxScore         int              `bson:"max_score" json:"max_score"`
 	Thresholds       []ScoreThreshold `bson:"thresholds" json:"thresholds"`
+	UseCompanyColors bool             `bson:"use_company_colors" json:"use_company_colors"`
 }
 
 // RiskCondition defines a single condition for evaluating a risk profile
@@ -44,12 +45,13 @@ type RiskCondition struct {
 
 // RiskProfile defines a configurable risk pattern across multiple dimensions
 type RiskProfile struct {
-	Name        string          `bson:"name" json:"name"`
-	Description string          `bson:"description" json:"description"`
-	Severity    string          `bson:"severity" json:"severity"` // "critical", "warning", "info"
-	Color       string          `bson:"color" json:"color"`
-	Logic       string          `bson:"logic" json:"logic"` // "all" (AND) or "any" (OR)
-	Conditions  []RiskCondition `bson:"conditions" json:"conditions"`
+	Name             string          `bson:"name" json:"name"`
+	Description      string          `bson:"description" json:"description"`
+	Severity         string          `bson:"severity" json:"severity"` // "critical", "warning", "info"
+	Color            string          `bson:"color" json:"color"`
+	Logic            string          `bson:"logic" json:"logic"` // "all" (AND) or "any" (OR)
+	Conditions       []RiskCondition `bson:"conditions" json:"conditions"`
+	UseCompanyColors bool            `bson:"use_company_colors" json:"use_company_colors"`
 }
 
 // EvaluationConfig holds the scoring methodology for a questionnaire

@@ -12,6 +12,7 @@ import (
 	"os"
 	"questionarie-service/models"
 	"questionarie-service/repository"
+	"questionarie-service/utils"
 	"sort"
 	"strconv"
 	"strings"
@@ -19,6 +20,15 @@ import (
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
+
+// getCompanyPrimaryColor returns the company's primary branding color, or a default.
+func (s *ReportService) getCompanyPrimaryColor(ctx context.Context, companyID primitive.ObjectID) string {
+	company, err := s.companyRepo.GetByID(ctx, companyID)
+	if err == nil && company.Branding != nil && company.Branding.PrimaryColor != "" {
+		return company.Branding.PrimaryColor
+	}
+	return "#6EC7E8"
+}
 
 // EmailAttachment represents a file attachment for email sending via Resend API
 type EmailAttachment struct {
@@ -989,6 +999,9 @@ func (s *ReportService) GetDimensionSummary(ctx context.Context, cqID primitive.
 
 	evalConfig := questionnaire.EvaluationConfig
 
+	// Resolve company primary color for palette generation
+	companyPrimary := s.getCompanyPrimaryColor(ctx, cq.CompanyID)
+
 	// Get all assignments for total count
 	allAssignments, err := s.assignmentRepo.GetByCompanyQuestionnaireID(ctx, cqID)
 	if err != nil {
@@ -1057,6 +1070,10 @@ func (s *ReportService) GetDimensionSummary(ctx context.Context, cqID primitive.
 		}
 
 		// Threshold distribution
+		var levelPalette map[string]string
+		if dim.UseCompanyColors {
+			levelPalette = utils.GenerateLevelColors(companyPrimary)
+		}
 		thresholds := make([]ThresholdDistribution, 0, len(dim.Thresholds))
 		for _, t := range dim.Thresholds {
 			minVal, maxVal := 0, 0
@@ -1071,12 +1088,18 @@ func (s *ReportService) GetDimensionSummary(ctx context.Context, cqID primitive.
 			if totalEval > 0 {
 				pct = math.Round(float64(count)/float64(totalEval)*1000) / 10
 			}
+			color := t.Color
+			if levelPalette != nil {
+				if c, ok := levelPalette[t.Level]; ok {
+					color = c
+				}
+			}
 			thresholds = append(thresholds, ThresholdDistribution{
 				Level:      t.Level,
 				Label:      t.Label,
 				Min:        minVal,
 				Max:        maxVal,
-				Color:      t.Color,
+				Color:      color,
 				Count:      count,
 				Percentage: pct,
 			})
@@ -1145,6 +1168,9 @@ func (s *ReportService) GetDepartmentDimensions(ctx context.Context, cqID primit
 	}
 
 	evalConfig := questionnaire.EvaluationConfig
+
+	// Resolve company primary color for palette generation
+	companyPrimary := s.getCompanyPrimaryColor(ctx, cq.CompanyID)
 
 	// Get user departments
 	users, err := s.userMetadataRepo.GetByCompanyID(ctx, cq.CompanyID)
@@ -1235,11 +1261,18 @@ func (s *ReportService) GetDepartmentDimensions(ctx context.Context, cqID primit
 					predominantLevel = lvl
 				}
 			}
-			// Get color from thresholds
-			for _, t := range dim.Thresholds {
-				if t.Level == predominantLevel {
-					predominantColor = t.Color
-					break
+			// Get color: from company palette if flag is set, otherwise from thresholds
+			if dim.UseCompanyColors {
+				palette := utils.GenerateLevelColors(companyPrimary)
+				if c, ok := palette[predominantLevel]; ok {
+					predominantColor = c
+				}
+			} else {
+				for _, t := range dim.Thresholds {
+					if t.Level == predominantLevel {
+						predominantColor = t.Color
+						break
+					}
 				}
 			}
 
@@ -1425,6 +1458,9 @@ func (s *ReportService) GetRiskAnalysis(ctx context.Context, cqID primitive.Obje
 		return &RiskAnalysisResult{RiskProfiles: []RiskProfileResult{}}, nil
 	}
 
+	// Resolve company primary color for palette generation
+	companyPrimary := s.getCompanyPrimaryColor(ctx, cq.CompanyID)
+
 	// Get evaluated assignments
 	allAssignments, err := s.assignmentRepo.GetByCompanyQuestionnaireID(ctx, cqID)
 	if err != nil {
@@ -1454,11 +1490,19 @@ func (s *ReportService) GetRiskAnalysis(ctx context.Context, cqID primitive.Obje
 			pct = math.Round(float64(affected)/float64(totalEval)*1000) / 10
 		}
 
+		color := rp.Color
+		if rp.UseCompanyColors {
+			severityPalette := utils.GenerateSeverityColors(companyPrimary)
+			if c, ok := severityPalette[rp.Severity]; ok {
+				color = c
+			}
+		}
+
 		results = append(results, RiskProfileResult{
 			Name:               rp.Name,
 			Description:        rp.Description,
 			Severity:           rp.Severity,
-			Color:              rp.Color,
+			Color:              color,
 			AffectedCount:      affected,
 			AffectedPercentage: pct,
 		})
