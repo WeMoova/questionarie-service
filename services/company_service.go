@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"questionarie-service/models"
 	"questionarie-service/repository"
 	"time"
@@ -41,6 +42,7 @@ type CompanyService struct {
 	questionnaireRepo        *repository.QuestionnaireRepository
 	assignmentRepo           *repository.AssignmentRepository
 	userMetadataRepo         *repository.UserMetadataRepository
+	cloudflareService        *CloudflareService
 }
 
 // NewCompanyService creates a new CompanyService
@@ -50,6 +52,7 @@ func NewCompanyService(
 	questionnaireRepo *repository.QuestionnaireRepository,
 	assignmentRepo *repository.AssignmentRepository,
 	userMetadataRepo *repository.UserMetadataRepository,
+	cloudflareService *CloudflareService,
 ) *CompanyService {
 	return &CompanyService{
 		companyRepo:              companyRepo,
@@ -57,6 +60,7 @@ func NewCompanyService(
 		questionnaireRepo:        questionnaireRepo,
 		assignmentRepo:           assignmentRepo,
 		userMetadataRepo:         userMetadataRepo,
+		cloudflareService:        cloudflareService,
 	}
 }
 
@@ -110,6 +114,12 @@ func (s *CompanyService) CreateCompany(ctx context.Context, name string, isActiv
 	}
 
 	if customDomain != nil && customDomain.Slug != "" {
+		// Validate slug format and reserved words
+		if s.cloudflareService != nil {
+			if err := s.cloudflareService.ValidateSlug(customDomain.Slug); err != nil {
+				return nil, err
+			}
+		}
 		existing, err := s.companyRepo.GetBySlug(ctx, customDomain.Slug)
 		if err != nil {
 			return nil, fmt.Errorf("failed to check slug uniqueness: %w", err)
@@ -124,6 +134,19 @@ func (s *CompanyService) CreateCompany(ctx context.Context, name string, isActiv
 	company.Branding = branding
 	company.CustomDomain = customDomain
 	company.Settings = settings
+
+	// Create DNS record for the slug (best-effort)
+	if s.cloudflareService != nil && customDomain != nil && customDomain.Slug != "" {
+		company.CustomDomain.DNSStatus = "pending"
+		if err := s.cloudflareService.EnsureDNSRecord(customDomain.Slug); err != nil {
+			slog.Error("failed to create DNS record", "slug", customDomain.Slug, "error", err)
+			company.CustomDomain.DNSStatus = "error"
+			company.CustomDomain.DNSError = err.Error()
+		} else {
+			company.CustomDomain.DNSStatus = "active"
+			company.CustomDomain.DNSError = ""
+		}
+	}
 
 	if err := s.companyRepo.Create(ctx, company); err != nil {
 		return nil, fmt.Errorf("failed to create company: %w", err)
@@ -194,6 +217,12 @@ func (s *CompanyService) UpdateCompany(ctx context.Context, id primitive.ObjectI
 	}
 	if customDomain != nil {
 		if customDomain.Slug != "" {
+			// Validate slug format and reserved words
+			if s.cloudflareService != nil {
+				if err := s.cloudflareService.ValidateSlug(customDomain.Slug); err != nil {
+					return err
+				}
+			}
 			existing, err := s.companyRepo.GetBySlug(ctx, customDomain.Slug)
 			if err != nil {
 				return fmt.Errorf("failed to check slug uniqueness: %w", err)
@@ -202,7 +231,40 @@ func (s *CompanyService) UpdateCompany(ctx context.Context, id primitive.ObjectI
 				return fmt.Errorf("slug '%s' is already in use", customDomain.Slug)
 			}
 		}
+
+		// Handle DNS record changes (best-effort)
+		oldSlug := ""
+		if company.CustomDomain != nil {
+			oldSlug = company.CustomDomain.Slug
+		}
+		newSlug := customDomain.Slug
+
 		company.CustomDomain = customDomain
+
+		if s.cloudflareService != nil && oldSlug != newSlug {
+			// Delete old DNS record if slug changed
+			if oldSlug != "" {
+				if err := s.cloudflareService.DeleteDNSRecord(oldSlug); err != nil {
+					slog.Error("failed to delete old DNS record", "slug", oldSlug, "error", err)
+				}
+			}
+			// Create new DNS record
+			if newSlug != "" {
+				company.CustomDomain.DNSStatus = "pending"
+				if err := s.cloudflareService.EnsureDNSRecord(newSlug); err != nil {
+					slog.Error("failed to create DNS record", "slug", newSlug, "error", err)
+					company.CustomDomain.DNSStatus = "error"
+					company.CustomDomain.DNSError = err.Error()
+				} else {
+					company.CustomDomain.DNSStatus = "active"
+					company.CustomDomain.DNSError = ""
+				}
+			} else {
+				// Slug removed — clear DNS status
+				company.CustomDomain.DNSStatus = ""
+				company.CustomDomain.DNSError = ""
+			}
+		}
 	}
 	if settings != nil {
 		company.Settings = settings
