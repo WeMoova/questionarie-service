@@ -110,3 +110,33 @@ func (s *APITokenService) ToggleToken(ctx context.Context, tokenID primitive.Obj
 	}
 	return s.tokenRepo.ToggleActive(ctx, tokenID, !token.IsActive)
 }
+
+// ValidateToken validates a raw API token and returns the associated token info.
+// It hashes the raw token and looks it up in the database. If valid, it updates last_used_at.
+func (s *APITokenService) ValidateToken(ctx context.Context, rawToken string) (*models.APIToken, error) {
+	hash := sha256.Sum256([]byte(rawToken))
+	tokenHash := hex.EncodeToString(hash[:])
+
+	token, err := s.tokenRepo.FindByHash(ctx, tokenHash)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate token: %w", err)
+	}
+	if token == nil {
+		return nil, nil
+	}
+
+	// Update last_used_at in background (don't block the response)
+	go func() {
+		bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = s.tokenRepo.UpdateLastUsed(bgCtx, token.ID)
+	}()
+
+	// Enrich with company name
+	company, err := s.companyRepo.GetByID(ctx, token.CompanyID)
+	if err == nil {
+		token.CompanyName = company.Name
+	}
+
+	return token, nil
+}

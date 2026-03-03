@@ -106,3 +106,36 @@ func (h *APITokenHandler) ToggleToken(w http.ResponseWriter, r *http.Request) {
 
 	utils.RespondWithSuccess(w, http.StatusOK, nil, "API token toggled successfully")
 }
+
+// ValidateAPIToken handles POST /api/v1/internal/validate-api-token
+// This is an internal endpoint (no JWT auth) for service-to-service token validation.
+func (h *APITokenHandler) ValidateAPIToken(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Token string `json:"token"`
+	}
+	if err := utils.ParseRequestBody(r, &req); err != nil {
+		utils.BadRequest(w, err.Error())
+		return
+	}
+	if req.Token == "" {
+		utils.BadRequest(w, "Token is required")
+		return
+	}
+
+	token, err := h.service.ValidateToken(r.Context(), req.Token)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+	if token == nil {
+		utils.Unauthorized(w, "Invalid or inactive API token")
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, map[string]interface{}{
+		"company_id":   token.CompanyID.Hex(),
+		"company_name": token.CompanyName,
+		"token_id":     token.ID.Hex(),
+		"token_name":   token.Name,
+	}, "Token is valid")
+}

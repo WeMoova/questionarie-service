@@ -185,6 +185,9 @@ func main() {
 		// Public company branding (no auth — employee app pre-login)
 		r.Get("/api/v1/public/company-branding/{slug}", companyHandler.GetCompanyBrandingBySlug)
 
+		// Internal service-to-service endpoints (no JWT — cluster-internal only)
+		r.Post("/api/v1/internal/validate-api-token", apiTokenHandler.ValidateAPIToken)
+
 		// Protected routes with JWT authentication
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware.JWTAuth)
