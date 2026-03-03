@@ -1265,6 +1265,121 @@ type RiskProfileResult struct {
 	AffectedPercentage float64 `json:"affected_percentage"`
 }
 
+// ── Free-text responses ──────────────────────────────────────────────────────
+
+// FreeTextEntry represents a single free-text response with department context
+type FreeTextEntry struct {
+	Department   string `json:"department"`
+	ResponseText string `json:"response_text"`
+}
+
+// FreeTextQuestionData holds all free-text responses for a single question
+type FreeTextQuestionData struct {
+	QuestionID   string          `json:"question_id"`
+	QuestionText string          `json:"question_text"`
+	SectionTitle string          `json:"section_title"`
+	TotalAnswers int             `json:"total_answers"`
+	Responses    []FreeTextEntry `json:"responses"`
+}
+
+// GetFreeTextResponses returns free-text question responses grouped by question
+func (s *ReportService) GetFreeTextResponses(ctx context.Context, cqID primitive.ObjectID, userID string, isSuperAdmin bool) ([]FreeTextQuestionData, error) {
+	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, cqID)
+	if err != nil {
+		return nil, fmt.Errorf("company questionnaire not found: %w", err)
+	}
+
+	if !isSuperAdmin {
+		userMeta, err := s.userMetadataRepo.GetByID(ctx, userID)
+		if err != nil {
+			return nil, fmt.Errorf("user metadata not found: %w", err)
+		}
+		if cq.CompanyID != userMeta.CompanyID {
+			return nil, fmt.Errorf("unauthorized: cannot access reports from other companies")
+		}
+	}
+
+	questionnaire, err := s.questionnaireRepo.GetByID(ctx, cq.QuestionnaireID)
+	if err != nil {
+		return nil, fmt.Errorf("questionnaire not found: %w", err)
+	}
+
+	// Build section lookup
+	sectionMap := make(map[string]string)
+	for _, sec := range questionnaire.Sections {
+		sectionMap[sec.ID] = sec.Title
+	}
+
+	// Filter free-text questions
+	var freeTextQuestions []models.Question
+	for _, q := range questionnaire.Questions {
+		if q.QuestionType == models.QuestionTypeFreeText {
+			freeTextQuestions = append(freeTextQuestions, q)
+		}
+	}
+
+	if len(freeTextQuestions) == 0 {
+		return []FreeTextQuestionData{}, nil
+	}
+
+	// Get completed assignments
+	assignments, err := s.assignmentRepo.GetByCompanyQuestionnaireID(ctx, cqID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get assignments: %w", err)
+	}
+
+	// Build user→department lookup from metadata
+	allMeta, err := s.userMetadataRepo.GetByCompanyID(ctx, cq.CompanyID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user metadata: %w", err)
+	}
+	deptMap := make(map[string]string)
+	for _, m := range allMeta {
+		deptMap[m.ID] = m.Department
+	}
+
+	// Collect responses per question
+	result := make([]FreeTextQuestionData, 0, len(freeTextQuestions))
+	for _, q := range freeTextQuestions {
+		data := FreeTextQuestionData{
+			QuestionID:   q.QuestionID,
+			QuestionText: q.QuestionText,
+			SectionTitle: sectionMap[q.SectionID],
+			Responses:    []FreeTextEntry{},
+		}
+
+		for _, a := range assignments {
+			if a.Status != models.AssignmentStatusCompleted {
+				continue
+			}
+			for _, r := range a.Responses {
+				if r.QuestionID != q.QuestionID {
+					continue
+				}
+				val, _ := r.ResponseValue["value"]
+				text := fmt.Sprintf("%v", val)
+				if text == "" || text == "<nil>" {
+					continue
+				}
+				data.TotalAnswers++
+				data.Responses = append(data.Responses, FreeTextEntry{
+					Department:   deptMap[a.UserID],
+					ResponseText: text,
+				})
+			}
+		}
+
+		// Sort by department for organized display
+		sort.Slice(data.Responses, func(i, j int) bool {
+			return data.Responses[i].Department < data.Responses[j].Department
+		})
+
+		result = append(result, data)
+	}
+
+	return result, nil
+}
+
 // GetRiskAnalysis evaluates risk profiles defined in the questionnaire's config
 func (s *ReportService) GetRiskAnalysis(ctx context.Context, cqID primitive.ObjectID, userID string, isSuperAdmin bool) (*RiskAnalysisResult, error) {
 	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, cqID)

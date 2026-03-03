@@ -254,6 +254,27 @@ func (h *ReportHandler) GetScoreDistribution(w http.ResponseWriter, r *http.Requ
 	utils.RespondWithSuccess(w, http.StatusOK, result, "")
 }
 
+// GetFreeTextResponses handles GET /api/v1/reports/company-questionnaire/:cq_id/free-text-responses
+func (h *ReportHandler) GetFreeTextResponses(w http.ResponseWriter, r *http.Request) {
+	cqIDStr := chi.URLParam(r, "cq_id")
+	cqID, err := utils.ValidateObjectID(cqIDStr)
+	if err != nil {
+		utils.BadRequest(w, err.Error())
+		return
+	}
+
+	claims, _ := middleware.GetUserFromContext(r.Context())
+	isSuperAdmin := middleware.IsSuperAdmin(r.Context())
+
+	result, err := h.service.GetFreeTextResponses(r.Context(), cqID, claims.Sub, isSuperAdmin)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, result, "")
+}
+
 // ExportCSV handles GET /api/v1/reports/company-questionnaire/:cq_id/export
 func (h *ReportHandler) ExportCSV(w http.ResponseWriter, r *http.Request) {
 	cqIDStr := chi.URLParam(r, "cq_id")
