@@ -349,6 +349,10 @@ func main() {
 				r.Put("/api/v1/company-questionnaires/{id}", companyHandler.UpdateCompanyQuestionnaire)
 				r.Delete("/api/v1/company-questionnaires/{id}", companyHandler.DeleteCompanyQuestionnaire)
 
+				// Color config
+				r.Get("/api/v1/company-questionnaires/{id}/color-config", companyHandler.GetColorConfig)
+				r.Put("/api/v1/company-questionnaires/{id}/color-config", companyHandler.UpdateColorConfig)
+
 				// Lifecycle transitions
 				r.Post("/api/v1/company-questionnaires/{id}/activate", companyHandler.ActivateCompanyQuestionnaire)
 				r.Post("/api/v1/company-questionnaires/{id}/pause", companyHandler.PauseCompanyQuestionnaire)

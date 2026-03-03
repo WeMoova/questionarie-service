@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // CompanyHandler handles company-related HTTP requests
@@ -516,4 +517,46 @@ func (h *CompanyHandler) GetCompanyBrandingBySlug(w http.ResponseWriter, r *http
 	}
 
 	utils.RespondWithSuccess(w, http.StatusOK, result, "")
+}
+
+// GetColorConfig handles GET /api/v1/company-questionnaires/{id}/color-config
+func (h *CompanyHandler) GetColorConfig(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := primitive.ObjectIDFromHex(idStr)
+	if err != nil {
+		utils.BadRequest(w, "invalid company questionnaire ID")
+		return
+	}
+
+	config, err := h.service.GetColorConfig(r.Context(), id)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, config, "")
+}
+
+// UpdateColorConfig handles PUT /api/v1/company-questionnaires/{id}/color-config
+func (h *CompanyHandler) UpdateColorConfig(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := primitive.ObjectIDFromHex(idStr)
+	if err != nil {
+		utils.BadRequest(w, "invalid company questionnaire ID")
+		return
+	}
+
+	var input models.ColorConfig
+	if err := utils.ParseRequestBody(r, &input); err != nil {
+		utils.BadRequest(w, err.Error())
+		return
+	}
+
+	result, err := h.service.UpdateColorConfig(r.Context(), id, &input)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, result, "Color config updated successfully")
 }

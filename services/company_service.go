@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"questionarie-service/models"
 	"questionarie-service/repository"
+	"questionarie-service/utils"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -761,4 +762,103 @@ func (s *CompanyService) GetCompanyStats(ctx context.Context, companyID primitiv
 		"active_questionnaires":  len(activeQuestionnaires),
 		"created_at":             company.CreatedAt,
 	}, nil
+}
+
+// GetColorConfig returns the color config for a company questionnaire.
+// If no config is set, returns the base questionnaire colors as a default config.
+func (s *CompanyService) GetColorConfig(ctx context.Context, cqID primitive.ObjectID) (*models.ColorConfig, error) {
+	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, cqID)
+	if err != nil {
+		return nil, fmt.Errorf("company questionnaire not found: %w", err)
+	}
+
+	if cq.ColorConfig != nil {
+		return cq.ColorConfig, nil
+	}
+
+	// Build a default config from the base questionnaire
+	questionnaire, err := s.questionnaireRepo.GetByID(ctx, cq.QuestionnaireID)
+	if err != nil {
+		return nil, fmt.Errorf("questionnaire not found: %w", err)
+	}
+
+	config := &models.ColorConfig{Mode: models.ColorModeDefault}
+
+	if questionnaire.EvaluationConfig != nil {
+		for _, dim := range questionnaire.EvaluationConfig.Dimensions {
+			thresholdColors := make(map[string]string)
+			for _, t := range dim.Thresholds {
+				if t.Color != "" {
+					thresholdColors[t.Level] = t.Color
+				}
+			}
+			if len(thresholdColors) > 0 {
+				config.DimensionColors = append(config.DimensionColors, models.DimensionColorConfig{
+					DimensionCode:   dim.Code,
+					ThresholdColors: thresholdColors,
+				})
+			}
+		}
+		for _, rp := range questionnaire.EvaluationConfig.RiskProfiles {
+			if rp.Color != "" {
+				config.RiskProfileColors = append(config.RiskProfileColors, models.RiskProfileColorConfig{
+					ProfileName: rp.Name,
+					Color:       rp.Color,
+				})
+			}
+		}
+	}
+
+	return config, nil
+}
+
+// UpdateColorConfig updates the color config for a company questionnaire.
+// For "from_primary" mode, generates colors from the primary color.
+// For "default" mode, clears the color config.
+func (s *CompanyService) UpdateColorConfig(ctx context.Context, cqID primitive.ObjectID, input *models.ColorConfig) (*models.ColorConfig, error) {
+	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, cqID)
+	if err != nil {
+		return nil, fmt.Errorf("company questionnaire not found: %w", err)
+	}
+
+	switch input.Mode {
+	case models.ColorModeDefault:
+		// Clear color config
+		if err := s.companyQuestionnaireRepo.UpdateColorConfig(ctx, cq.ID, nil); err != nil {
+			return nil, err
+		}
+		return &models.ColorConfig{Mode: models.ColorModeDefault}, nil
+
+	case models.ColorModeFromPrimary:
+		primaryColor := input.PrimaryColor
+		if primaryColor == "" {
+			// Try to get from company branding
+			company, err := s.companyRepo.GetByID(ctx, cq.CompanyID)
+			if err == nil && company.Branding != nil && company.Branding.PrimaryColor != "" {
+				primaryColor = company.Branding.PrimaryColor
+			} else {
+				primaryColor = "#6EC7E8"
+			}
+		}
+
+		questionnaire, err := s.questionnaireRepo.GetByID(ctx, cq.QuestionnaireID)
+		if err != nil {
+			return nil, fmt.Errorf("questionnaire not found: %w", err)
+		}
+
+		generated := utils.GenerateFullColorConfig(primaryColor, questionnaire.EvaluationConfig)
+		if err := s.companyQuestionnaireRepo.UpdateColorConfig(ctx, cq.ID, generated); err != nil {
+			return nil, err
+		}
+		return generated, nil
+
+	case models.ColorModeCustom:
+		if err := s.companyQuestionnaireRepo.UpdateColorConfig(ctx, cq.ID, input); err != nil {
+			return nil, err
+		}
+		return input, nil
+
+	default:
+		return nil, fmt.Errorf("invalid color mode: %s", input.Mode)
+	}
 }

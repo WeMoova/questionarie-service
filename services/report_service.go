@@ -12,7 +12,6 @@ import (
 	"os"
 	"questionarie-service/models"
 	"questionarie-service/repository"
-	"questionarie-service/utils"
 	"sort"
 	"strconv"
 	"strings"
@@ -20,15 +19,6 @@ import (
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
-
-// getCompanyPrimaryColor returns the company's primary branding color, or a default.
-func (s *ReportService) getCompanyPrimaryColor(ctx context.Context, companyID primitive.ObjectID) string {
-	company, err := s.companyRepo.GetByID(ctx, companyID)
-	if err == nil && company.Branding != nil && company.Branding.PrimaryColor != "" {
-		return company.Branding.PrimaryColor
-	}
-	return "#6EC7E8"
-}
 
 // EmailAttachment represents a file attachment for email sending via Resend API
 type EmailAttachment struct {
@@ -999,8 +989,8 @@ func (s *ReportService) GetDimensionSummary(ctx context.Context, cqID primitive.
 
 	evalConfig := questionnaire.EvaluationConfig
 
-	// Resolve company primary color for palette generation
-	companyPrimary := s.getCompanyPrimaryColor(ctx, cq.CompanyID)
+	// Resolve colors: CQ color config > base questionnaire
+	resolved := s.resolveQuestionnaireColors(ctx, cq, evalConfig)
 
 	// Get all assignments for total count
 	allAssignments, err := s.assignmentRepo.GetByCompanyQuestionnaireID(ctx, cqID)
@@ -1070,10 +1060,6 @@ func (s *ReportService) GetDimensionSummary(ctx context.Context, cqID primitive.
 		}
 
 		// Threshold distribution
-		var levelPalette map[string]string
-		if dim.UseCompanyColors {
-			levelPalette = utils.GenerateLevelColors(companyPrimary)
-		}
 		thresholds := make([]ThresholdDistribution, 0, len(dim.Thresholds))
 		for _, t := range dim.Thresholds {
 			minVal, maxVal := 0, 0
@@ -1089,8 +1075,8 @@ func (s *ReportService) GetDimensionSummary(ctx context.Context, cqID primitive.
 				pct = math.Round(float64(count)/float64(totalEval)*1000) / 10
 			}
 			color := t.Color
-			if levelPalette != nil {
-				if c, ok := levelPalette[t.Level]; ok {
+			if dimColors, ok := resolved.DimensionThresholdColors[dim.Code]; ok {
+				if c, ok := dimColors[t.Level]; ok {
 					color = c
 				}
 			}
@@ -1169,8 +1155,8 @@ func (s *ReportService) GetDepartmentDimensions(ctx context.Context, cqID primit
 
 	evalConfig := questionnaire.EvaluationConfig
 
-	// Resolve company primary color for palette generation
-	companyPrimary := s.getCompanyPrimaryColor(ctx, cq.CompanyID)
+	// Resolve colors: CQ color config > base questionnaire
+	resolved := s.resolveQuestionnaireColors(ctx, cq, evalConfig)
 
 	// Get user departments
 	users, err := s.userMetadataRepo.GetByCompanyID(ctx, cq.CompanyID)
@@ -1261,13 +1247,13 @@ func (s *ReportService) GetDepartmentDimensions(ctx context.Context, cqID primit
 					predominantLevel = lvl
 				}
 			}
-			// Get color: from company palette if flag is set, otherwise from thresholds
-			if dim.UseCompanyColors {
-				palette := utils.GenerateLevelColors(companyPrimary)
-				if c, ok := palette[predominantLevel]; ok {
+			// Get color from resolved colors, fallback to base thresholds
+			if dimColors, ok := resolved.DimensionThresholdColors[dim.Code]; ok {
+				if c, ok := dimColors[predominantLevel]; ok {
 					predominantColor = c
 				}
-			} else {
+			}
+			if predominantColor == "" {
 				for _, t := range dim.Thresholds {
 					if t.Level == predominantLevel {
 						predominantColor = t.Color
@@ -1458,8 +1444,8 @@ func (s *ReportService) GetRiskAnalysis(ctx context.Context, cqID primitive.Obje
 		return &RiskAnalysisResult{RiskProfiles: []RiskProfileResult{}}, nil
 	}
 
-	// Resolve company primary color for palette generation
-	companyPrimary := s.getCompanyPrimaryColor(ctx, cq.CompanyID)
+	// Resolve colors: CQ color config > base questionnaire
+	resolved := s.resolveQuestionnaireColors(ctx, cq, questionnaire.EvaluationConfig)
 
 	// Get evaluated assignments
 	allAssignments, err := s.assignmentRepo.GetByCompanyQuestionnaireID(ctx, cqID)
@@ -1491,11 +1477,8 @@ func (s *ReportService) GetRiskAnalysis(ctx context.Context, cqID primitive.Obje
 		}
 
 		color := rp.Color
-		if rp.UseCompanyColors {
-			severityPalette := utils.GenerateSeverityColors(companyPrimary)
-			if c, ok := severityPalette[rp.Severity]; ok {
-				color = c
-			}
+		if c, ok := resolved.RiskProfileColors[rp.Name]; ok {
+			color = c
 		}
 
 		results = append(results, RiskProfileResult{

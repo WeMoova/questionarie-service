@@ -178,6 +178,35 @@ func (r *CompanyQuestionnaireRepository) UpdateReminder(ctx context.Context, id 
 	return nil
 }
 
+// UpdateColorConfig updates the color_config field of a company questionnaire
+func (r *CompanyQuestionnaireRepository) UpdateColorConfig(ctx context.Context, id primitive.ObjectID, colorConfig *models.ColorConfig) error {
+	update := bson.M{
+		"$set": bson.M{
+			"color_config": colorConfig,
+		},
+	}
+
+	// If nil (default mode), unset the field entirely
+	if colorConfig == nil {
+		update = bson.M{
+			"$unset": bson.M{
+				"color_config": "",
+			},
+		}
+	}
+
+	result, err := r.collection.UpdateOne(ctx, bson.M{"_id": id}, update)
+	if err != nil {
+		return fmt.Errorf("failed to update color config: %w", err)
+	}
+
+	if result.MatchedCount == 0 {
+		return fmt.Errorf("company questionnaire not found")
+	}
+
+	return nil
+}
+
 // Deactivate deactivates a company questionnaire
 func (r *CompanyQuestionnaireRepository) Deactivate(ctx context.Context, id primitive.ObjectID) error {
 	update := bson.M{

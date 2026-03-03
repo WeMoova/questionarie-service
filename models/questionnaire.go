@@ -33,7 +33,6 @@ type DimensionConfig struct {
 	ScoringDirection string           `bson:"scoring_direction" json:"scoring_direction"` // "direct" or "inverse"
 	MaxScore         int              `bson:"max_score" json:"max_score"`
 	Thresholds       []ScoreThreshold `bson:"thresholds" json:"thresholds"`
-	UseCompanyColors bool             `bson:"use_company_colors" json:"use_company_colors"`
 }
 
 // RiskCondition defines a single condition for evaluating a risk profile
@@ -51,7 +50,6 @@ type RiskProfile struct {
 	Color            string          `bson:"color" json:"color"`
 	Logic            string          `bson:"logic" json:"logic"` // "all" (AND) or "any" (OR)
 	Conditions       []RiskCondition `bson:"conditions" json:"conditions"`
-	UseCompanyColors bool            `bson:"use_company_colors" json:"use_company_colors"`
 }
 
 // EvaluationConfig holds the scoring methodology for a questionnaire
@@ -78,6 +76,35 @@ type Questionnaire struct {
 	CategoryID       *primitive.ObjectID `bson:"category_id,omitempty" json:"category_id,omitempty"`
 	CreatedAt        time.Time           `bson:"created_at" json:"created_at"`
 	UpdatedAt        time.Time           `bson:"updated_at" json:"updated_at"`
+}
+
+// ColorMode defines how colors are resolved for a company questionnaire
+type ColorMode string
+
+const (
+	ColorModeDefault     ColorMode = "default"      // use base questionnaire colors
+	ColorModeFromPrimary ColorMode = "from_primary"  // generate from company primary color
+	ColorModeCustom      ColorMode = "custom"        // manually configured colors
+)
+
+// DimensionColorConfig holds threshold colors for a specific dimension
+type DimensionColorConfig struct {
+	DimensionCode   string            `bson:"dimension_code" json:"dimension_code"`
+	ThresholdColors map[string]string `bson:"threshold_colors" json:"threshold_colors"` // level -> hex
+}
+
+// RiskProfileColorConfig holds color for a specific risk profile
+type RiskProfileColorConfig struct {
+	ProfileName string `bson:"profile_name" json:"profile_name"`
+	Color       string `bson:"color" json:"color"`
+}
+
+// ColorConfig stores color configuration for a company questionnaire assignment
+type ColorConfig struct {
+	Mode              ColorMode                `bson:"mode" json:"mode"`
+	PrimaryColor      string                   `bson:"primary_color,omitempty" json:"primary_color,omitempty"`
+	DimensionColors   []DimensionColorConfig   `bson:"dimension_colors,omitempty" json:"dimension_colors,omitempty"`
+	RiskProfileColors []RiskProfileColorConfig `bson:"risk_profile_colors,omitempty" json:"risk_profile_colors,omitempty"`
 }
 
 // CompanyQuestionnaireStatus represents the lifecycle state of a company questionnaire
@@ -178,6 +205,7 @@ type CompanyQuestionnaire struct {
 	RemindersSent   int                        `bson:"reminders_sent" json:"reminders_sent"`
 	LastReminderAt  *time.Time                 `bson:"last_reminder_at,omitempty" json:"last_reminder_at,omitempty"`
 	DisplayMode     DisplayMode                `bson:"display_mode,omitempty" json:"display_mode,omitempty"`
+	ColorConfig     *ColorConfig               `bson:"color_config,omitempty" json:"color_config,omitempty"`
 	// Transient fields — not persisted, populated by service layer
 	QuestionnaireTitle       string `bson:"-" json:"questionnaire_title,omitempty"`
 	QuestionnaireDescription string `bson:"-" json:"questionnaire_description,omitempty"`

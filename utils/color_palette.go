@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"math"
 	"strings"
+
+	"questionarie-service/models"
 )
 
-const defaultPrimaryColor = "#6EC7E8"
+const DefaultPrimaryColor = "#6EC7E8"
 
 // HexToHSL converts a hex color string (#RRGGBB) to HSL values.
 func HexToHSL(hex string) (h, s, l float64) {
@@ -117,7 +119,7 @@ func clampL(l float64) float64 {
 // bajo → lighter, medio → near primary, alto → darker.
 func GenerateLevelColors(primaryHex string) map[string]string {
 	if primaryHex == "" {
-		primaryHex = defaultPrimaryColor
+		primaryHex = DefaultPrimaryColor
 	}
 	h, s, l := HexToHSL(primaryHex)
 
@@ -134,7 +136,7 @@ func GenerateLevelColors(primaryHex string) map[string]string {
 // low → lightest, medium → light, high → primary, critical → darkest.
 func GenerateSeverityColors(primaryHex string) map[string]string {
 	if primaryHex == "" {
-		primaryHex = defaultPrimaryColor
+		primaryHex = DefaultPrimaryColor
 	}
 	h, s, l := HexToHSL(primaryHex)
 
@@ -145,5 +147,110 @@ func GenerateSeverityColors(primaryHex string) map[string]string {
 		"critical": HSLToHex(h, s, clampL(l-0.20)),
 		"info":     HSLToHex(h, s, clampL(l+0.30)),
 		"warning":  HSLToHex(h, s, clampL(l+0.10)),
+	}
+}
+
+// GenerateDistinctHues generates N visually distinct colors by rotating hue from the primary.
+// Algorithm: hue_i = primary_hue + (i * 360/N), keeping S and L similar.
+func GenerateDistinctHues(primaryHex string, n int) []string {
+	if primaryHex == "" {
+		primaryHex = DefaultPrimaryColor
+	}
+	if n <= 0 {
+		return nil
+	}
+
+	h, s, l := HexToHSL(primaryHex)
+	// Ensure good saturation and mid-range lightness for visibility
+	if s < 0.4 {
+		s = 0.55
+	}
+	if l < 0.35 || l > 0.65 {
+		l = 0.50
+	}
+
+	colors := make([]string, n)
+	for i := 0; i < n; i++ {
+		hue := math.Mod(h+float64(i)*360.0/float64(n), 360)
+		colors[i] = HSLToHex(hue, s, l)
+	}
+	return colors
+}
+
+// GenerateThresholdVariations generates lightness variations for threshold levels of a dimension.
+// Levels are ordered from lowest to highest risk; colors go from lightest to darkest.
+func GenerateThresholdVariations(baseHex string, levels []string) map[string]string {
+	if len(levels) == 0 {
+		return nil
+	}
+
+	h, s, _ := HexToHSL(baseHex)
+	result := make(map[string]string, len(levels))
+
+	if len(levels) == 1 {
+		result[levels[0]] = HSLToHex(h, s, 0.50)
+		return result
+	}
+
+	// Distribute lightness from 0.75 (lightest) to 0.30 (darkest)
+	for i, level := range levels {
+		t := float64(i) / float64(len(levels)-1) // 0.0 to 1.0
+		l := 0.75 - t*0.45                        // 0.75 → 0.30
+		result[level] = HSLToHex(h, s, l)
+	}
+	return result
+}
+
+// GenerateFullColorConfig generates a complete ColorConfig from a primary color
+// and the questionnaire's evaluation config structure.
+func GenerateFullColorConfig(primaryHex string, evalConfig *models.EvaluationConfig) *models.ColorConfig {
+	if evalConfig == nil {
+		return &models.ColorConfig{
+			Mode:         models.ColorModeFromPrimary,
+			PrimaryColor: primaryHex,
+		}
+	}
+
+	if primaryHex == "" {
+		primaryHex = DefaultPrimaryColor
+	}
+
+	// Generate N distinct base hues for N dimensions
+	nDims := len(evalConfig.Dimensions)
+	baseHues := GenerateDistinctHues(primaryHex, nDims)
+
+	dimColors := make([]models.DimensionColorConfig, 0, nDims)
+	for i, dim := range evalConfig.Dimensions {
+		levels := make([]string, 0, len(dim.Thresholds))
+		for _, t := range dim.Thresholds {
+			levels = append(levels, t.Level)
+		}
+
+		thresholdColors := GenerateThresholdVariations(baseHues[i], levels)
+		dimColors = append(dimColors, models.DimensionColorConfig{
+			DimensionCode:   dim.Code,
+			ThresholdColors: thresholdColors,
+		})
+	}
+
+	// Generate risk profile colors by rotating hue with darker tones
+	nProfiles := len(evalConfig.RiskProfiles)
+	profileHues := GenerateDistinctHues(primaryHex, nProfiles)
+	rpColors := make([]models.RiskProfileColorConfig, 0, nProfiles)
+	for i, rp := range evalConfig.RiskProfiles {
+		h, s, _ := HexToHSL(profileHues[i])
+		// Darker tone for risk profiles
+		color := HSLToHex(h, s, 0.40)
+		rpColors = append(rpColors, models.RiskProfileColorConfig{
+			ProfileName: rp.Name,
+			Color:       color,
+		})
+	}
+
+	return &models.ColorConfig{
+		Mode:              models.ColorModeFromPrimary,
+		PrimaryColor:      primaryHex,
+		DimensionColors:   dimColors,
+		RiskProfileColors: rpColors,
 	}
 }
