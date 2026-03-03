@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"questionarie-service/middleware"
 	"questionarie-service/models"
 	"questionarie-service/repository"
 	"time"
@@ -109,6 +110,24 @@ func (s *APITokenService) ToggleToken(ctx context.Context, tokenID primitive.Obj
 		return fmt.Errorf("cannot toggle a revoked token")
 	}
 	return s.tokenRepo.ToggleActive(ctx, tokenID, !token.IsActive)
+}
+
+// ValidateTokenRaw validates a raw API token and returns company info for the middleware.
+// Implements middleware.APITokenValidator.
+func (s *APITokenService) ValidateTokenRaw(ctx context.Context, rawToken string) (*middleware.APICompanyInfo, error) {
+	token, err := s.ValidateToken(ctx, rawToken)
+	if err != nil {
+		return nil, err
+	}
+	if token == nil {
+		return nil, nil
+	}
+	return &middleware.APICompanyInfo{
+		CompanyID:   token.CompanyID,
+		CompanyName: token.CompanyName,
+		TokenID:     token.ID,
+		TokenName:   token.Name,
+	}, nil
 }
 
 // ValidateToken validates a raw API token and returns the associated token info.

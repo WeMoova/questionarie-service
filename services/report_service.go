@@ -79,6 +79,18 @@ type DepartmentCompletionStat struct {
 	Percentage float64 `json:"percentage"`
 }
 
+// VerifyCompanyOwnership checks that a company questionnaire belongs to the given company.
+func (s *ReportService) VerifyCompanyOwnership(ctx context.Context, cqID, companyID primitive.ObjectID) error {
+	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, cqID)
+	if err != nil {
+		return fmt.Errorf("company questionnaire not found: %w", err)
+	}
+	if cq.CompanyID != companyID {
+		return fmt.Errorf("unauthorized: questionnaire does not belong to this company")
+	}
+	return nil
+}
+
 // GetCompletionMetrics retrieves completion metrics for a company questionnaire
 func (s *ReportService) GetCompletionMetrics(ctx context.Context, companyQuestionnaireID primitive.ObjectID, userID string, isSuperAdmin bool) (*CompletionMetrics, error) {
 	// Get company questionnaire

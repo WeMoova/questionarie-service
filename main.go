@@ -101,6 +101,7 @@ func main() {
 	categoryHandler := handlers.NewCategoryHandler(categoryService, companyService)
 	gamificationHandler := handlers.NewGamificationHandler(gamificationService)
 	apiTokenHandler := handlers.NewAPITokenHandler(apiTokenService)
+	companyAPIHandler := handlers.NewCompanyAPIHandler(reportService)
 
 	var imageHandler *handlers.ImageHandler
 	if minioStorage != nil {
@@ -187,6 +188,14 @@ func main() {
 
 		// Internal service-to-service endpoints (no JWT — cluster-internal only)
 		r.Post("/api/v1/internal/validate-api-token", apiTokenHandler.ValidateAPIToken)
+
+		// Company-facing API (API key auth — for external company integrations)
+		r.Group(func(r chi.Router) {
+			r.Use(authMiddleware.APIKeyAuth(apiTokenService))
+
+			r.Get("/api/v1/company-api/reports/{cq_id}/pdf", companyAPIHandler.GeneratePDF)
+			r.Get("/api/v1/company-api/reports/{cq_id}/excel", companyAPIHandler.GenerateExcel)
+		})
 
 		// Protected routes with JWT authentication
 		r.Group(func(r chi.Router) {
