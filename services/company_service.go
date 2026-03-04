@@ -830,9 +830,17 @@ func (s *CompanyService) UpdateColorConfig(ctx context.Context, cqID primitive.O
 		return &models.ColorConfig{Mode: models.ColorModeDefault}, nil
 
 	case models.ColorModeFromPrimary:
+		// If the frontend sent the generated colors, use them as-is
+		if len(input.DimensionColors) > 0 {
+			if err := s.companyQuestionnaireRepo.UpdateColorConfig(ctx, cq.ID, input); err != nil {
+				return nil, err
+			}
+			return input, nil
+		}
+
+		// Fallback: generate server-side (for API calls without pre-generated colors)
 		primaryColor := input.PrimaryColor
 		if primaryColor == "" {
-			// Try to get from company branding
 			company, err := s.companyRepo.GetByID(ctx, cq.CompanyID)
 			if err == nil && company.Branding != nil && company.Branding.PrimaryColor != "" {
 				primaryColor = company.Branding.PrimaryColor
