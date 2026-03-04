@@ -73,17 +73,17 @@ func (s *CloudflareService) ValidateSlug(slug string) error {
 	if slug == "" {
 		return nil // empty slug is allowed (means no subdomain)
 	}
-	if len(slug) < 3 {
-		return fmt.Errorf("el subdominio debe tener al menos 3 caracteres")
+	if len(slug) < 2 {
+		return fmt.Errorf("invalid slug: el subdominio debe tener al menos 2 caracteres")
 	}
 	if len(slug) > 63 {
-		return fmt.Errorf("el subdominio no puede tener más de 63 caracteres")
+		return fmt.Errorf("invalid slug: el subdominio no puede tener más de 63 caracteres")
 	}
 	if !slugRegex.MatchString(slug) {
-		return fmt.Errorf("el subdominio solo puede contener letras minúsculas, números y guiones")
+		return fmt.Errorf("invalid slug: el subdominio solo puede contener letras minúsculas, números y guiones")
 	}
 	if reservedSlugs[slug] {
-		return fmt.Errorf("el subdominio '%s' está reservado", slug)
+		return fmt.Errorf("invalid slug: el subdominio '%s' está reservado", slug)
 	}
 	return nil
 }
