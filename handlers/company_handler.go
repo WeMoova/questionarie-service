@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log/slog"
 	"net/http"
 	"questionarie-service/middleware"
 	"questionarie-service/models"
@@ -128,6 +129,7 @@ func (h *CompanyHandler) UpdateCompany(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.service.UpdateCompany(r.Context(), id, req.Name, req.IsActive, req.Branding, req.CustomDomain, req.Settings); err != nil {
+		slog.Error("UpdateCompany failed", "company_id", id.Hex(), "error", err.Error())
 		utils.HandleRepositoryError(w, err)
 		return
 	}
