@@ -150,8 +150,12 @@ func GenerateSeverityColors(primaryHex string) map[string]string {
 	}
 }
 
-// GenerateDistinctHues generates N visually distinct colors by rotating hue from the primary.
-// Algorithm: hue_i = primary_hue + (i * 360/N), keeping S and L similar.
+// GenerateDistinctHues generates N visually distinct colors from the primary.
+// Uses a bounded hue spread (not full 360°) so all colors stay in the same
+// color family, matching the frontend's dimensionBases() algorithm:
+//   - 1-3 dims: ±15° hue
+//   - 4-6 dims: ±25° hue + saturation shifts
+//   - 7+  dims: ±35° hue + saturation + lightness shifts
 func GenerateDistinctHues(primaryHex string, n int) []string {
 	if primaryHex == "" {
 		primaryHex = DefaultPrimaryColor
@@ -161,42 +165,96 @@ func GenerateDistinctHues(primaryHex string, n int) []string {
 	}
 
 	h, s, l := HexToHSL(primaryHex)
-	// Ensure good saturation and mid-range lightness for visibility
-	if s < 0.4 {
+
+	// Ensure good saturation and mid-range lightness
+	if s < 0.25 {
 		s = 0.55
 	}
-	if l < 0.35 || l > 0.65 {
+	if l < 0.35 {
+		l = 0.45
+	} else if l > 0.60 {
 		l = 0.50
+	}
+
+	if n == 1 {
+		return []string{HSLToHex(h, s, l)}
+	}
+
+	hueSpread := 15.0
+	useSatShift := false
+	useLumShift := false
+	if n > 3 && n <= 6 {
+		hueSpread = 25.0
+		useSatShift = true
+	} else if n > 6 {
+		hueSpread = 35.0
+		useSatShift = true
+		useLumShift = true
 	}
 
 	colors := make([]string, n)
 	for i := 0; i < n; i++ {
-		hue := math.Mod(h+float64(i)*360.0/float64(n), 360)
-		colors[i] = HSLToHex(hue, s, l)
+		t := float64(i) / float64(n-1) // 0..1
+		hueOffset := (t - 0.5) * 2 * hueSpread
+		hue := math.Mod(h+hueOffset+360, 360)
+
+		si := s
+		if useSatShift {
+			if i%2 == 0 {
+				si = math.Min(1, si+0.10)
+			} else {
+				si = math.Max(0.25, si-0.10)
+			}
+		}
+
+		li := l
+		if useLumShift {
+			li += float64(i%3-1) * 0.06
+			li = math.Min(0.60, math.Max(0.35, li))
+		}
+
+		colors[i] = HSLToHex(hue, si, li)
 	}
 	return colors
 }
 
 // GenerateThresholdVariations generates lightness variations for threshold levels of a dimension.
 // Levels are ordered from lowest to highest risk; colors go from lightest to darkest.
+// Matches the frontend's thresholdScale() which uses light → base → dark.
 func GenerateThresholdVariations(baseHex string, levels []string) map[string]string {
 	if len(levels) == 0 {
 		return nil
 	}
 
-	h, s, _ := HexToHSL(baseHex)
+	h, s, l := HexToHSL(baseHex)
 	result := make(map[string]string, len(levels))
 
 	if len(levels) == 1 {
-		result[levels[0]] = HSLToHex(h, s, 0.50)
+		result[levels[0]] = HSLToHex(h, s, l)
 		return result
 	}
 
-	// Distribute lightness from 0.75 (lightest) to 0.30 (darkest)
+	// Light tint → base → dark shade (matching frontend's brighten(1.8) → darken(2.2))
+	lightL := math.Min(0.92, l+0.30)
+	lightS := math.Min(1.0, s+0.10)
+	darkL := math.Max(0.15, l-0.25)
+	darkS := math.Min(1.0, s+0.15)
+
 	for i, level := range levels {
-		t := float64(i) / float64(len(levels)-1) // 0.0 to 1.0
-		l := 0.75 - t*0.45                        // 0.75 → 0.30
-		result[level] = HSLToHex(h, s, l)
+		t := float64(i) / float64(len(levels)-1)
+		var ci_l, ci_s float64
+		if t <= 0.5 {
+			// light → base
+			u := t * 2 // 0..1
+			ci_l = lightL + (l-lightL)*u
+			ci_s = lightS + (s-lightS)*u
+		} else {
+			// base → dark
+			u := (t - 0.5) * 2 // 0..1
+			ci_l = l + (darkL-l)*u
+			ci_s = s + (darkS-s)*u
+		}
+		result[level] = HSLToHex(h, ci_s, ci_l)
 	}
 	return result
 }
@@ -233,14 +291,24 @@ func GenerateFullColorConfig(primaryHex string, evalConfig *models.EvaluationCon
 		})
 	}
 
-	// Generate risk profile colors by rotating hue with darker tones
+	// Generate risk profile colors: scale from medium to dark of primary
+	// Matches frontend: chroma.scale([rpLight, rpDark]).colors(N)
 	nProfiles := len(evalConfig.RiskProfiles)
-	profileHues := GenerateDistinctHues(primaryHex, nProfiles)
+	h, s, l := HexToHSL(primaryHex)
+	rpLightS := math.Min(1.0, s+0.15)
+	rpLightL := l
+	rpDarkS := math.Min(1.0, s+0.30)
+	rpDarkL := math.Max(0.15, l-0.35)
+
 	rpColors := make([]models.RiskProfileColorConfig, 0, nProfiles)
 	for i, rp := range evalConfig.RiskProfiles {
-		h, s, _ := HexToHSL(profileHues[i])
-		// Darker tone for risk profiles
-		color := HSLToHex(h, s, 0.40)
+		t := 0.0
+		if nProfiles > 1 {
+			t = float64(i) / float64(nProfiles-1)
+		}
+		ci_s := rpLightS + (rpDarkS-rpLightS)*t
+		ci_l := rpLightL + (rpDarkL-rpLightL)*t
+		color := HSLToHex(h, ci_s, ci_l)
 		rpColors = append(rpColors, models.RiskProfileColorConfig{
 			ProfileName: rp.Name,
 			Color:       color,
