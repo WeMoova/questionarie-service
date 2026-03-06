@@ -81,6 +81,21 @@ func (r *CompanyRepository) Update(ctx context.Context, id primitive.ObjectID, c
 	if company.CustomDomain != nil {
 		setFields["custom_domain"] = company.CustomDomain
 	}
+	if company.Settings != nil {
+		setFields["settings"] = company.Settings
+	}
+	if company.FusionAuthTenantID != "" {
+		setFields["fusionauth_tenant_id"] = company.FusionAuthTenantID
+	}
+	if company.FusionAuthApplicationID != "" {
+		setFields["fusionauth_application_id"] = company.FusionAuthApplicationID
+	}
+	if company.FusionAuthClientID != "" {
+		setFields["fusionauth_client_id"] = company.FusionAuthClientID
+	}
+	if company.FusionAuthClientSecret != "" {
+		setFields["fusionauth_client_secret"] = company.FusionAuthClientSecret
+	}
 	update := bson.M{"$set": setFields}
 
 	result, err := r.collection.UpdateOne(ctx, bson.M{"_id": id}, update)
