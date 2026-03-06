@@ -17,15 +17,17 @@ import (
 
 // CompanyHandler handles company-related HTTP requests
 type CompanyHandler struct {
-	service          *services.CompanyService
+	service           *services.CompanyService
 	fusionAuthService *services.FusionAuthService
+	cloudflareService *services.CloudflareService
 }
 
 // NewCompanyHandler creates a new CompanyHandler
-func NewCompanyHandler(service *services.CompanyService, fusionAuthService *services.FusionAuthService) *CompanyHandler {
+func NewCompanyHandler(service *services.CompanyService, fusionAuthService *services.FusionAuthService, cloudflareService *services.CloudflareService) *CompanyHandler {
 	return &CompanyHandler{
-		service:          service,
+		service:           service,
 		fusionAuthService: fusionAuthService,
+		cloudflareService: cloudflareService,
 	}
 }
 
@@ -260,6 +262,31 @@ func (h *CompanyHandler) DeleteCompany(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		utils.BadRequest(w, err.Error())
 		return
+	}
+
+	// Fetch company before deleting to clean up external resources
+	company, err := h.service.GetCompanyByID(r.Context(), id)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	// Clean up FusionAuth tenant
+	if h.fusionAuthService != nil && company.FusionAuthTenantID != "" {
+		if err := h.fusionAuthService.DeleteTenant(r.Context(), company.FusionAuthTenantID); err != nil {
+			slog.Error("failed to delete FusionAuth tenant", "company_id", id.Hex(), "tenant_id", company.FusionAuthTenantID, "error", err)
+		} else {
+			slog.Info("FusionAuth tenant deleted", "company_id", id.Hex(), "tenant_id", company.FusionAuthTenantID)
+		}
+	}
+
+	// Clean up Cloudflare DNS record
+	if h.cloudflareService != nil && company.CustomDomain != nil && company.CustomDomain.Slug != "" {
+		if err := h.cloudflareService.DeleteDNSRecord(company.CustomDomain.Slug); err != nil {
+			slog.Error("failed to delete DNS record", "company_id", id.Hex(), "slug", company.CustomDomain.Slug, "error", err)
+		} else {
+			slog.Info("DNS record deleted", "company_id", id.Hex(), "slug", company.CustomDomain.Slug)
+		}
 	}
 
 	if err := h.service.DeleteCompany(r.Context(), id); err != nil {

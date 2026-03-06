@@ -94,7 +94,7 @@ func main() {
 	// Initialize handlers
 	questionnaireHandler := handlers.NewQuestionnaireHandler(questionnaireService, categoryService, companyService)
 	fusionAuthService := services.NewFusionAuthService()
-	companyHandler := handlers.NewCompanyHandler(companyService, fusionAuthService)
+	companyHandler := handlers.NewCompanyHandler(companyService, fusionAuthService, cloudflareService)
 	userMetadataHandler := handlers.NewUserMetadataHandler(userMetadataService)
 	assignmentHandler := handlers.NewAssignmentHandler(assignmentService)
 	responseHandler := handlers.NewResponseHandler(assignmentService)
