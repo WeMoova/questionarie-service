@@ -73,6 +73,8 @@ func (s *FusionAuthService) CreateTenantForCompany(ctx context.Context, company 
 
 	// Merge SMTP config with template IDs
 	emailConfig := s.mergeEmailConfig(smtpConfig)
+	// Override fromName with company name for white-label emails
+	emailConfig["defaultFromName"] = company.Name
 
 	// 2. Create tenant
 	tenantBody := map[string]interface{}{
