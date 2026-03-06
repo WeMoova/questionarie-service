@@ -173,8 +173,8 @@ func (h *CompanyHandler) UpdateCompany(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Sync branding/name to FusionAuth tenant if changed and tenant exists
-		if (req.Branding != nil || req.Name != "") && err == nil && company.FusionAuthTenantID != "" {
+		// Sync company data to FusionAuth tenant on any update
+		if err == nil && company.FusionAuthTenantID != "" {
 			go func() {
 				if err := h.fusionAuthService.SyncBrandingToTenant(context.Background(), company); err != nil {
 					slog.Error("failed to sync branding to FusionAuth", "company_id", id.Hex(), "error", err)
