@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"questionarie-service/middleware"
@@ -16,13 +17,15 @@ import (
 
 // CompanyHandler handles company-related HTTP requests
 type CompanyHandler struct {
-	service *services.CompanyService
+	service          *services.CompanyService
+	fusionAuthService *services.FusionAuthService
 }
 
 // NewCompanyHandler creates a new CompanyHandler
-func NewCompanyHandler(service *services.CompanyService) *CompanyHandler {
+func NewCompanyHandler(service *services.CompanyService, fusionAuthService *services.FusionAuthService) *CompanyHandler {
 	return &CompanyHandler{
-		service: service,
+		service:          service,
+		fusionAuthService: fusionAuthService,
 	}
 }
 
@@ -51,6 +54,24 @@ func (h *CompanyHandler) CreateCompany(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		utils.HandleRepositoryError(w, err)
 		return
+	}
+
+	// Create FusionAuth tenant for the company (synchronous)
+	if h.fusionAuthService != nil && company.CustomDomain != nil && company.CustomDomain.Slug != "" {
+		result, err := h.fusionAuthService.CreateTenantForCompany(r.Context(), company)
+		if err != nil {
+			slog.Error("failed to create FusionAuth tenant", "company_id", company.ID.Hex(), "error", err)
+			// Don't fail company creation — tenant can be created later
+		} else {
+			if err := h.service.UpdateCompanyFusionAuth(r.Context(), company.ID, result.TenantID, result.ApplicationID, result.ClientID, result.ClientSecret); err != nil {
+				slog.Error("failed to save FusionAuth IDs", "company_id", company.ID.Hex(), "error", err)
+			} else {
+				company.FusionAuthTenantID = result.TenantID
+				company.FusionAuthApplicationID = result.ApplicationID
+				company.FusionAuthClientID = result.ClientID
+				company.FusionAuthClientSecret = result.ClientSecret
+			}
+		}
 	}
 
 	utils.RespondWithSuccess(w, http.StatusCreated, company, "Company created successfully")
@@ -132,6 +153,18 @@ func (h *CompanyHandler) UpdateCompany(w http.ResponseWriter, r *http.Request) {
 		slog.Error("UpdateCompany failed", "company_id", id.Hex(), "error", err.Error())
 		utils.HandleRepositoryError(w, err)
 		return
+	}
+
+	// Sync branding to FusionAuth tenant if branding changed
+	if req.Branding != nil && h.fusionAuthService != nil {
+		company, err := h.service.GetCompanyByID(r.Context(), id)
+		if err == nil && company.FusionAuthTenantID != "" {
+			go func() {
+				if err := h.fusionAuthService.SyncBrandingToTenant(context.Background(), company); err != nil {
+					slog.Error("failed to sync branding to FusionAuth", "company_id", id.Hex(), "error", err)
+				}
+			}()
+		}
 	}
 
 	utils.RespondWithSuccess(w, http.StatusOK, nil, "Company updated successfully")
@@ -561,4 +594,36 @@ func (h *CompanyHandler) UpdateColorConfig(w http.ResponseWriter, r *http.Reques
 	}
 
 	utils.RespondWithSuccess(w, http.StatusOK, result, "Color config updated successfully")
+}
+
+// GetCompanyAuthConfig handles GET /api/v1/public/company-auth-config/{slug}
+// Public endpoint — returns FusionAuth auth config for the employee app login.
+func (h *CompanyHandler) GetCompanyAuthConfig(w http.ResponseWriter, r *http.Request) {
+	slug := chi.URLParam(r, "slug")
+	if slug == "" {
+		utils.BadRequest(w, "slug is required")
+		return
+	}
+
+	company, err := h.service.GetCompanyBySlug(r.Context(), slug)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+	if company == nil || !company.IsActive {
+		utils.RespondWithError(w, http.StatusNotFound, "company not found")
+		return
+	}
+
+	if company.FusionAuthTenantID == "" {
+		utils.RespondWithError(w, http.StatusNotFound, "company auth not configured")
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, map[string]string{
+		"tenant_id":      company.FusionAuthTenantID,
+		"application_id": company.FusionAuthApplicationID,
+		"client_id":      company.FusionAuthClientID,
+		"client_secret":  company.FusionAuthClientSecret,
+	}, "")
 }

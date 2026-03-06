@@ -739,6 +739,28 @@ func (s *CompanyService) GetCompanyBrandingBySlug(ctx context.Context, slug stri
 	}, nil
 }
 
+// GetCompanyBySlug retrieves a company by its slug
+func (s *CompanyService) GetCompanyBySlug(ctx context.Context, slug string) (*models.Company, error) {
+	if slug == "" {
+		return nil, fmt.Errorf("slug is required")
+	}
+	return s.companyRepo.GetBySlug(ctx, slug)
+}
+
+// UpdateCompanyFusionAuth updates the FusionAuth fields on a company
+func (s *CompanyService) UpdateCompanyFusionAuth(ctx context.Context, id primitive.ObjectID, tenantID, appID, clientID, clientSecret string) error {
+	company, err := s.companyRepo.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	company.FusionAuthTenantID = tenantID
+	company.FusionAuthApplicationID = appID
+	company.FusionAuthClientID = clientID
+	company.FusionAuthClientSecret = clientSecret
+	company.UpdatedAt = time.Now()
+	return s.companyRepo.Update(ctx, id, company)
+}
+
 func (s *CompanyService) GetCompanyStats(ctx context.Context, companyID primitive.ObjectID) (map[string]interface{}, error) {
 	company, err := s.companyRepo.GetByID(ctx, companyID)
 	if err != nil {

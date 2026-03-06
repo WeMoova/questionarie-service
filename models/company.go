@@ -45,6 +45,13 @@ type Company struct {
 	Settings     *CompanySettings   `bson:"settings,omitempty" json:"settings,omitempty"`
 	CreatedAt    time.Time          `bson:"created_at" json:"created_at"`
 	UpdatedAt    time.Time          `bson:"updated_at" json:"updated_at"`
+
+	// FusionAuth multi-tenant fields
+	FusionAuthTenantID      string `bson:"fusionauth_tenant_id,omitempty" json:"fusionauth_tenant_id,omitempty"`
+	FusionAuthApplicationID string `bson:"fusionauth_application_id,omitempty" json:"fusionauth_application_id,omitempty"`
+	FusionAuthClientID      string `bson:"fusionauth_client_id,omitempty" json:"fusionauth_client_id,omitempty"`
+	FusionAuthClientSecret  string `bson:"fusionauth_client_secret,omitempty" json:"fusionauth_client_secret,omitempty"`
+
 	// Transient field — not persisted, populated by service layer
 	QuestionnaireCount int `bson:"-" json:"questionnaire_count"`
 }

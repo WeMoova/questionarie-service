@@ -93,7 +93,8 @@ func main() {
 
 	// Initialize handlers
 	questionnaireHandler := handlers.NewQuestionnaireHandler(questionnaireService, categoryService, companyService)
-	companyHandler := handlers.NewCompanyHandler(companyService)
+	fusionAuthService := services.NewFusionAuthService()
+	companyHandler := handlers.NewCompanyHandler(companyService, fusionAuthService)
 	userMetadataHandler := handlers.NewUserMetadataHandler(userMetadataService)
 	assignmentHandler := handlers.NewAssignmentHandler(assignmentService)
 	responseHandler := handlers.NewResponseHandler(assignmentService)
@@ -185,6 +186,7 @@ func main() {
 
 		// Public company branding (no auth — employee app pre-login)
 		r.Get("/api/v1/public/company-branding/{slug}", companyHandler.GetCompanyBrandingBySlug)
+		r.Get("/api/v1/public/company-auth-config/{slug}", companyHandler.GetCompanyAuthConfig)
 
 		// Internal service-to-service endpoints (no JWT — cluster-internal only)
 		r.Post("/api/v1/internal/validate-api-token", apiTokenHandler.ValidateAPIToken)

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -21,9 +20,10 @@ type contextKey string
 const UserContextKey contextKey = "user"
 
 type JWTClaims struct {
-	Sub   string   `json:"sub"`
-	Email string   `json:"email"`
-	Roles []string `json:"roles"`
+	Sub      string   `json:"sub"`
+	Email    string   `json:"email"`
+	Roles    []string `json:"roles"`
+	TenantID string   `json:"tid"` // FusionAuth tenant ID (multi-tenant)
 	jwt.RegisteredClaims
 }
 
@@ -69,19 +69,13 @@ func validateToken(tokenString string) (*JWTClaims, error) {
 
 	jwksURL := fmt.Sprintf("%s/.well-known/jwks.json", fusionAuthURL)
 
-	// Build parser options for audience and issuer validation
+	// Build parser options — multi-tenant: skip audience validation (each tenant has its own applicationId).
+	// Security relies on RSA signature verification via JWKS.
 	parserOpts := []jwt.ParserOption{}
-	if aud := os.Getenv("FUSIONAUTH_CLIENT_ID"); aud != "" {
-		parserOpts = append(parserOpts, jwt.WithAudience(aud))
-	}
-	if iss := os.Getenv("FUSIONAUTH_URL"); iss != "" {
-		// FusionAuth emits tokens with issuer as hostname only (e.g. "auth.wemoova.com")
-		if parsed, err := url.Parse(iss); err == nil && parsed.Host != "" {
-			parserOpts = append(parserOpts, jwt.WithIssuer(parsed.Host))
-		} else {
-			parserOpts = append(parserOpts, jwt.WithIssuer(iss))
-		}
-	}
+	// NOTE: Audience validation removed for multi-tenant support.
+	// Each tenant has a different applicationId, so we can't validate against a single value.
+	// Issuer validation is also relaxed — tenants may use "{slug}.wemoova.com" as issuer.
+	// The JWKS signature verification is the primary security mechanism.
 
 	token, err := jwt.ParseWithClaims(tokenString, &JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
 		// Verify signing method
@@ -171,4 +165,13 @@ func GetUserFromContext(ctx context.Context) (*JWTClaims, error) {
 		return nil, fmt.Errorf("user not found in context")
 	}
 	return claims, nil
+}
+
+// GetTenantIDFromContext extracts the FusionAuth tenant ID from the JWT claims in context
+func GetTenantIDFromContext(ctx context.Context) string {
+	claims, ok := ctx.Value(UserContextKey).(*JWTClaims)
+	if !ok {
+		return ""
+	}
+	return claims.TenantID
 }
