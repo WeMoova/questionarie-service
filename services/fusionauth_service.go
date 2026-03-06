@@ -172,7 +172,11 @@ func (s *FusionAuthService) SyncBrandingToTenant(ctx context.Context, company *m
 
 	body := map[string]interface{}{
 		"tenant": map[string]interface{}{
+			"name": company.Name,
 			"data": tenantData,
+			"emailConfiguration": map[string]interface{}{
+				"defaultFromName": company.Name,
+			},
 		},
 	}
 
@@ -181,7 +185,7 @@ func (s *FusionAuthService) SyncBrandingToTenant(ctx context.Context, company *m
 		return fmt.Errorf("failed to sync branding to tenant: %w", err)
 	}
 
-	slog.Info("fusionauth tenant branding synced", "tenant_id", company.FusionAuthTenantID, "company", company.Name)
+	slog.Info("fusionauth tenant synced", "tenant_id", company.FusionAuthTenantID, "company", company.Name)
 	return nil
 }
 
