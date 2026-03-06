@@ -277,7 +277,35 @@ func (s *CompanyService) UpdateCompany(ctx context.Context, id primitive.ObjectI
 
 // DeleteCompany deletes a company
 func (s *CompanyService) DeleteCompany(ctx context.Context, id primitive.ObjectID) error {
-	// TODO: Check if company has users or active questionnaires before deleting
+	// Delete all assignments for this company's questionnaires
+	cqIDs, err := s.companyQuestionnaireRepo.GetIDsByCompanyID(ctx, id)
+	if err != nil {
+		slog.Error("failed to get company questionnaire IDs for cleanup", "company_id", id.Hex(), "error", err)
+	} else if len(cqIDs) > 0 {
+		deleted, err := s.assignmentRepo.DeleteByCompanyQuestionnaireIDs(ctx, cqIDs)
+		if err != nil {
+			slog.Error("failed to delete assignments", "company_id", id.Hex(), "error", err)
+		} else {
+			slog.Info("assignments deleted", "company_id", id.Hex(), "count", deleted)
+		}
+	}
+
+	// Delete all company questionnaires
+	cqDeleted, err := s.companyQuestionnaireRepo.DeleteByCompanyID(ctx, id)
+	if err != nil {
+		slog.Error("failed to delete company questionnaires", "company_id", id.Hex(), "error", err)
+	} else {
+		slog.Info("company questionnaires deleted", "company_id", id.Hex(), "count", cqDeleted)
+	}
+
+	// Delete all user metadata for this company
+	usersDeleted, err := s.userMetadataRepo.DeleteByCompanyID(ctx, id)
+	if err != nil {
+		slog.Error("failed to delete user metadata", "company_id", id.Hex(), "error", err)
+	} else {
+		slog.Info("user metadata deleted", "company_id", id.Hex(), "count", usersDeleted)
+	}
+
 	return s.companyRepo.Delete(ctx, id)
 }
 

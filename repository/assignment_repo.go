@@ -335,6 +335,18 @@ func (r *AssignmentRepository) Delete(ctx context.Context, id primitive.ObjectID
 	return nil
 }
 
+// DeleteByCompanyQuestionnaireIDs deletes all assignments for the given company questionnaire IDs
+func (r *AssignmentRepository) DeleteByCompanyQuestionnaireIDs(ctx context.Context, cqIDs []primitive.ObjectID) (int64, error) {
+	if len(cqIDs) == 0 {
+		return 0, nil
+	}
+	result, err := r.collection.DeleteMany(ctx, bson.M{"company_questionnaire_id": bson.M{"$in": cqIDs}})
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete assignments by company questionnaire IDs: %w", err)
+	}
+	return result.DeletedCount, nil
+}
+
 // SetEvaluationResult stores the evaluation result on a completed assignment
 func (r *AssignmentRepository) SetEvaluationResult(ctx context.Context, id primitive.ObjectID, result *models.EvaluationResult) error {
 	update := bson.M{

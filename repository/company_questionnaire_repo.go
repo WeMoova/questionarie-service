@@ -242,6 +242,37 @@ func (r *CompanyQuestionnaireRepository) Delete(ctx context.Context, id primitiv
 	return nil
 }
 
+// DeleteByCompanyID deletes all company questionnaires for a company
+func (r *CompanyQuestionnaireRepository) DeleteByCompanyID(ctx context.Context, companyID primitive.ObjectID) (int64, error) {
+	result, err := r.collection.DeleteMany(ctx, bson.M{"company_id": companyID})
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete company questionnaires: %w", err)
+	}
+	return result.DeletedCount, nil
+}
+
+// GetIDsByCompanyID returns the IDs of all company questionnaires for a company
+func (r *CompanyQuestionnaireRepository) GetIDsByCompanyID(ctx context.Context, companyID primitive.ObjectID) ([]primitive.ObjectID, error) {
+	cursor, err := r.collection.Find(ctx, bson.M{"company_id": companyID}, options.Find().SetProjection(bson.M{"_id": 1}))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get company questionnaire IDs: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	var results []struct {
+		ID primitive.ObjectID `bson:"_id"`
+	}
+	if err := cursor.All(ctx, &results); err != nil {
+		return nil, fmt.Errorf("failed to decode IDs: %w", err)
+	}
+
+	ids := make([]primitive.ObjectID, len(results))
+	for i, r := range results {
+		ids[i] = r.ID
+	}
+	return ids, nil
+}
+
 // CountByCompanyID counts active questionnaires assigned to a company
 func (r *CompanyQuestionnaireRepository) CountByCompanyID(ctx context.Context, companyID primitive.ObjectID) (int64, error) {
 	count, err := r.collection.CountDocuments(ctx, bson.M{

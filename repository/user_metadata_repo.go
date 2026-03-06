@@ -184,6 +184,15 @@ func (r *UserMetadataRepository) Delete(ctx context.Context, userID string) erro
 	return nil
 }
 
+// DeleteByCompanyID deletes all user metadata for a company
+func (r *UserMetadataRepository) DeleteByCompanyID(ctx context.Context, companyID primitive.ObjectID) (int64, error) {
+	result, err := r.collection.DeleteMany(ctx, bson.M{"company_id": companyID})
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete users by company: %w", err)
+	}
+	return result.DeletedCount, nil
+}
+
 // Exists checks if user metadata exists
 func (r *UserMetadataRepository) Exists(ctx context.Context, userID string) (bool, error) {
 	count, err := r.collection.CountDocuments(ctx, bson.M{"_id": userID})
