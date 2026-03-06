@@ -196,6 +196,12 @@ func (s *FusionAuthService) DeleteTenant(ctx context.Context, tenantID string) e
 	return err
 }
 
+// DeleteUser deletes a user from FusionAuth by user ID
+func (s *FusionAuthService) DeleteUser(ctx context.Context, userID string) error {
+	_, err := s.doRequest(ctx, "DELETE", "/api/user/"+userID+"?hardDelete=true", nil, nil)
+	return err
+}
+
 // buildTenantData creates the tenant.data map from company branding
 func (s *FusionAuthService) buildTenantData(company *models.Company) map[string]interface{} {
 	data := map[string]interface{}{

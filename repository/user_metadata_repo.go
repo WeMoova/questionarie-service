@@ -184,6 +184,28 @@ func (r *UserMetadataRepository) Delete(ctx context.Context, userID string) erro
 	return nil
 }
 
+// GetIDsByCompanyID returns all user IDs (FusionAuth IDs) for a company
+func (r *UserMetadataRepository) GetIDsByCompanyID(ctx context.Context, companyID primitive.ObjectID) ([]string, error) {
+	cursor, err := r.collection.Find(ctx, bson.M{"company_id": companyID}, options.Find().SetProjection(bson.M{"_id": 1}))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user IDs by company: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	var results []struct {
+		ID string `bson:"_id"`
+	}
+	if err := cursor.All(ctx, &results); err != nil {
+		return nil, fmt.Errorf("failed to decode user IDs: %w", err)
+	}
+
+	ids := make([]string, len(results))
+	for i, r := range results {
+		ids[i] = r.ID
+	}
+	return ids, nil
+}
+
 // DeleteByCompanyID deletes all user metadata for a company
 func (r *UserMetadataRepository) DeleteByCompanyID(ctx context.Context, companyID primitive.ObjectID) (int64, error) {
 	result, err := r.collection.DeleteMany(ctx, bson.M{"company_id": companyID})

@@ -271,12 +271,30 @@ func (h *CompanyHandler) DeleteCompany(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Clean up FusionAuth tenant
-	if h.fusionAuthService != nil && company.FusionAuthTenantID != "" {
-		if err := h.fusionAuthService.DeleteTenant(r.Context(), company.FusionAuthTenantID); err != nil {
-			slog.Error("failed to delete FusionAuth tenant", "company_id", id.Hex(), "tenant_id", company.FusionAuthTenantID, "error", err)
+	// Delete FusionAuth users for this company
+	if h.fusionAuthService != nil {
+		userIDs, err := h.service.GetUserIDsByCompanyID(r.Context(), id)
+		if err != nil {
+			slog.Error("failed to get user IDs for FusionAuth cleanup", "company_id", id.Hex(), "error", err)
 		} else {
-			slog.Info("FusionAuth tenant deleted", "company_id", id.Hex(), "tenant_id", company.FusionAuthTenantID)
+			deleted := 0
+			for _, uid := range userIDs {
+				if err := h.fusionAuthService.DeleteUser(r.Context(), uid); err != nil {
+					slog.Error("failed to delete FusionAuth user", "user_id", uid, "company_id", id.Hex(), "error", err)
+				} else {
+					deleted++
+				}
+			}
+			slog.Info("FusionAuth users deleted", "company_id", id.Hex(), "deleted", deleted, "total", len(userIDs))
+		}
+
+		// Clean up FusionAuth tenant
+		if company.FusionAuthTenantID != "" {
+			if err := h.fusionAuthService.DeleteTenant(r.Context(), company.FusionAuthTenantID); err != nil {
+				slog.Error("failed to delete FusionAuth tenant", "company_id", id.Hex(), "tenant_id", company.FusionAuthTenantID, "error", err)
+			} else {
+				slog.Info("FusionAuth tenant deleted", "company_id", id.Hex(), "tenant_id", company.FusionAuthTenantID)
+			}
 		}
 	}
 

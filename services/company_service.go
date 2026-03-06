@@ -309,6 +309,11 @@ func (s *CompanyService) DeleteCompany(ctx context.Context, id primitive.ObjectI
 	return s.companyRepo.Delete(ctx, id)
 }
 
+// GetUserIDsByCompanyID returns FusionAuth user IDs for a company
+func (s *CompanyService) GetUserIDsByCompanyID(ctx context.Context, companyID primitive.ObjectID) ([]string, error) {
+	return s.userMetadataRepo.GetIDsByCompanyID(ctx, companyID)
+}
+
 // SearchCompaniesByName searches companies by name
 func (s *CompanyService) SearchCompaniesByName(ctx context.Context, name string) ([]*models.Company, error) {
 	if name == "" {
