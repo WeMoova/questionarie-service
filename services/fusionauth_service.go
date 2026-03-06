@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"questionarie-service/models"
+	"strings"
 	"time"
 )
 
@@ -216,10 +217,10 @@ func (s *FusionAuthService) buildTenantData(company *models.Company) map[string]
 		if b.AccentColor != "" {
 			data["accentColor"] = b.AccentColor
 		}
-		if b.Logo != "" {
+		if b.Logo != "" && !strings.HasSuffix(strings.ToLower(b.Logo), ".svg") {
 			data["logoUrl"] = s.apiBase + "/api/v1/images/" + b.Logo
 		}
-		if b.LogoIcon != "" {
+		if b.LogoIcon != "" && !strings.HasSuffix(strings.ToLower(b.LogoIcon), ".svg") {
 			data["logoIconUrl"] = s.apiBase + "/api/v1/images/" + b.LogoIcon
 		}
 	}
