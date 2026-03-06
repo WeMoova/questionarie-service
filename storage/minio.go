@@ -56,7 +56,7 @@ func NewMinIOStorage() (*MinIOStorage, error) {
 
 // AllowedImageTypes for validation
 var AllowedImageTypes = map[string]bool{
-	".jpg": true, ".jpeg": true, ".png": true, ".webp": true, ".gif": true,
+	".jpg": true, ".jpeg": true, ".png": true, ".webp": true, ".gif": true, ".svg": true,
 }
 
 // MaxImageSize is 5MB
@@ -77,6 +77,8 @@ func (s *MinIOStorage) UploadImage(ctx context.Context, reader io.Reader, size i
 	contentType := "image/" + strings.TrimPrefix(ext, ".")
 	if ext == ".jpg" {
 		contentType = "image/jpeg"
+	} else if ext == ".svg" {
+		contentType = "image/svg+xml"
 	}
 
 	_, err := s.client.PutObject(ctx, s.bucketName, objectName, reader, size, minio.PutObjectOptions{
