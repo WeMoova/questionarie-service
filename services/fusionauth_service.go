@@ -226,16 +226,13 @@ func (s *FusionAuthService) mergeEmailConfig(smtpConfig map[string]interface{}) 
 	// Start with the SMTP config from default tenant
 	config := smtpConfig
 
-	// Assign email template IDs
+	// Assign email template IDs (only templates available without Threat Detection license)
 	config["setPasswordEmailTemplateId"] = "5cb4c04f-da04-4568-8bad-b1f640afdd80"
 	config["forgotPasswordEmailTemplateId"] = "fb178f2d-2f61-41a0-baa8-16e69bb403a7"
 	config["verifyEmailTemplateId"] = "0dc276b0-a0ce-48c1-8042-db46b25fe090"
 	config["verificationEmailTemplateId"] = "f52265f4-ac41-403b-a780-d7e4c96101e8"
-	config["loginNewDeviceEmailTemplateId"] = "b8cb71f9-45d4-4d85-b4c6-42970d593a43"
-	config["passwordResetSuccessEmailTemplateId"] = "859b12ef-4e26-45c2-ab96-bd8b1482d702"
-	config["twoFactorMethodAddEmailTemplateId"] = "3fa9e4e4-c97c-42f2-ac1a-82787a2db276"
-	config["twoFactorMethodRemoveEmailTemplateId"] = "65e02158-7eec-44f0-8d43-e4bc2f9bd5f1"
 	config["passwordlessEmailTemplateId"] = "2b4c751d-b81d-4bde-80a8-7aa7ef012262"
+	// NOTE: loginNewDevice, passwordResetSuccess, twoFactorMethodAdd/Remove require Threat Detection license
 
 	return config
 }
