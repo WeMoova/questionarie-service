@@ -155,10 +155,24 @@ func (h *CompanyHandler) UpdateCompany(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Sync branding to FusionAuth tenant if branding changed
-	if req.Branding != nil && h.fusionAuthService != nil {
+	// Create FusionAuth tenant if company now has a slug but no tenant yet
+	if h.fusionAuthService != nil {
 		company, err := h.service.GetCompanyByID(r.Context(), id)
-		if err == nil && company.FusionAuthTenantID != "" {
+		if err == nil && company.CustomDomain != nil && company.CustomDomain.Slug != "" && company.FusionAuthTenantID == "" {
+			result, err := h.fusionAuthService.CreateTenantForCompany(r.Context(), company)
+			if err != nil {
+				slog.Error("failed to create FusionAuth tenant on update", "company_id", id.Hex(), "error", err)
+			} else {
+				if err := h.service.UpdateCompanyFusionAuth(r.Context(), company.ID, result.TenantID, result.ApplicationID, result.ClientID, result.ClientSecret); err != nil {
+					slog.Error("failed to save FusionAuth IDs on update", "company_id", id.Hex(), "error", err)
+				} else {
+					company.FusionAuthTenantID = result.TenantID
+				}
+			}
+		}
+
+		// Sync branding to FusionAuth tenant if branding changed and tenant exists
+		if req.Branding != nil && err == nil && company.FusionAuthTenantID != "" {
 			go func() {
 				if err := h.fusionAuthService.SyncBrandingToTenant(context.Background(), company); err != nil {
 					slog.Error("failed to sync branding to FusionAuth", "company_id", id.Hex(), "error", err)
