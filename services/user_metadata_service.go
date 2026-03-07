@@ -289,8 +289,8 @@ func (s *UserMetadataService) ListUsersWithFilters(ctx context.Context, companyI
 	if pageSize <= 0 {
 		pageSize = 10
 	}
-	if pageSize > 100 {
-		pageSize = 100
+	if pageSize > 10000 {
+		pageSize = 10000
 	}
 
 	// Get user claims from context
