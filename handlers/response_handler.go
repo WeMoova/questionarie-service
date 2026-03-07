@@ -88,12 +88,19 @@ func (h *ResponseHandler) UpdateResponses(w http.ResponseWriter, r *http.Request
 
 	claims, _ := middleware.GetUserFromContext(r.Context())
 
-	// Save each response
-	for _, response := range req.Responses {
-		if err := h.service.SaveResponse(r.Context(), id, claims.Sub, response.QuestionID, response.ResponseValue); err != nil {
-			utils.HandleRepositoryError(w, err)
-			return
-		}
+	// Batch save all responses in a single operation
+	batchResponses := make([]struct {
+		QuestionID    string      `json:"question_id"`
+		ResponseValue interface{} `json:"response_value"`
+	}, len(req.Responses))
+	for i, r := range req.Responses {
+		batchResponses[i].QuestionID = r.QuestionID
+		batchResponses[i].ResponseValue = r.ResponseValue
+	}
+
+	if err := h.service.SaveResponsesBatch(r.Context(), id, claims.Sub, batchResponses); err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
 	}
 
 	utils.RespondWithSuccess(w, http.StatusOK, nil, "Responses updated successfully")

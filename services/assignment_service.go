@@ -333,6 +333,64 @@ func (s *AssignmentService) SaveResponse(
 	return s.assignmentRepo.AddOrUpdateResponse(ctx, assignmentID, *response)
 }
 
+// SaveResponsesBatch saves all responses for an assignment in a single operation.
+// This replaces the per-question loop with one atomic MongoDB write.
+func (s *AssignmentService) SaveResponsesBatch(
+	ctx context.Context,
+	assignmentID primitive.ObjectID,
+	userID string,
+	responses []struct {
+		QuestionID    string      `json:"question_id"`
+		ResponseValue interface{} `json:"response_value"`
+	},
+) error {
+	// Get assignment once
+	assignment, err := s.assignmentRepo.GetByID(ctx, assignmentID)
+	if err != nil {
+		return err
+	}
+
+	// Verify ownership
+	if assignment.UserID != userID {
+		return fmt.Errorf("unauthorized: assignment does not belong to user")
+	}
+
+	// Verify assignment is not completed
+	if assignment.Status == models.AssignmentStatusCompleted {
+		return fmt.Errorf("cannot modify completed assignment")
+	}
+
+	// Get company questionnaire to check period
+	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, assignment.CompanyQuestionnaireID)
+	if err != nil {
+		return err
+	}
+
+	if !cq.IsWithinPeriod() {
+		return fmt.Errorf("questionnaire period has expired")
+	}
+
+	// Merge new responses with existing ones (preserve responses not in this batch)
+	existingMap := make(map[string]models.Response, len(assignment.Responses))
+	for _, r := range assignment.Responses {
+		existingMap[r.QuestionID] = r
+	}
+
+	// Override with new responses
+	for _, r := range responses {
+		existingMap[r.QuestionID] = *models.NewResponse(r.QuestionID, r.ResponseValue)
+	}
+
+	// Flatten to slice
+	merged := make([]models.Response, 0, len(existingMap))
+	for _, r := range existingMap {
+		merged = append(merged, r)
+	}
+
+	// Single atomic write
+	return s.assignmentRepo.SetAllResponses(ctx, assignmentID, merged)
+}
+
 // SubmitAssignment marks an assignment as completed
 func (s *AssignmentService) SubmitAssignment(ctx context.Context, assignmentID primitive.ObjectID, userID string) error {
 	// Get assignment
@@ -362,27 +420,24 @@ func (s *AssignmentService) SubmitAssignment(ctx context.Context, assignmentID p
 		return err
 	}
 
-	// Count required questions
-	requiredCount := 0
+	// Build set of required question IDs for O(1) lookup
+	requiredIDs := make(map[string]struct{})
 	for _, q := range questionnaire.Questions {
 		if q.IsRequired {
-			requiredCount++
+			requiredIDs[q.QuestionID] = struct{}{}
 		}
 	}
 
 	// Count answered required questions
 	answeredRequired := 0
 	for _, response := range assignment.Responses {
-		for _, q := range questionnaire.Questions {
-			if q.QuestionID == response.QuestionID && q.IsRequired {
-				answeredRequired++
-				break
-			}
+		if _, ok := requiredIDs[response.QuestionID]; ok {
+			answeredRequired++
 		}
 	}
 
-	if answeredRequired < requiredCount {
-		return fmt.Errorf("not all required questions answered (%d/%d)", answeredRequired, requiredCount)
+	if answeredRequired < len(requiredIDs) {
+		return fmt.Errorf("not all required questions answered (%d/%d)", answeredRequired, len(requiredIDs))
 	}
 
 	// Mark as completed
@@ -390,29 +445,32 @@ func (s *AssignmentService) SubmitAssignment(ctx context.Context, assignmentID p
 		return err
 	}
 
-	// Evaluate assignment if questionnaire has evaluation config
-	if s.evaluationService != nil {
-		evalResult, err := s.evaluationService.EvaluateAssignment(ctx, assignmentID, questionnaire.ID)
-		if err != nil {
-			slog.Error("evaluation failed", "assignment_id", assignmentID.Hex(), "error", err)
-		} else if evalResult != nil {
-			if err := s.assignmentRepo.SetEvaluationResult(ctx, assignmentID, evalResult); err != nil {
-				slog.Error("failed to store evaluation result", "assignment_id", assignmentID.Hex(), "error", err)
+	// Run evaluation + gamification async — don't block the HTTP response
+	go func() {
+		bgCtx := context.Background()
+
+		// Evaluate assignment if questionnaire has evaluation config
+		if s.evaluationService != nil {
+			evalResult, err := s.evaluationService.EvaluateAssignment(bgCtx, assignmentID, questionnaire.ID)
+			if err != nil {
+				slog.Error("evaluation failed", "assignment_id", assignmentID.Hex(), "error", err)
+			} else if evalResult != nil {
+				if err := s.assignmentRepo.SetEvaluationResult(bgCtx, assignmentID, evalResult); err != nil {
+					slog.Error("failed to store evaluation result", "assignment_id", assignmentID.Hex(), "error", err)
+				}
 			}
 		}
-	}
 
-	// Award gamification points (fire-and-forget, don't block submission)
-	if s.gamificationService != nil {
-		go func() {
-			bgCtx := context.Background()
+		// Award gamification points
+		if s.gamificationService != nil {
 			s.gamificationService.AwardPointsForCompletion(bgCtx, userID, assignmentID.Hex())
 			s.gamificationService.UpdateStreak(bgCtx, userID)
 			s.gamificationService.CheckAndAwardBadges(bgCtx, userID)
 			s.gamificationService.CheckAndAwardAchievements(bgCtx, userID)
-			slog.Info("gamification completed", "user_id", userID, "assignment_id", assignmentID.Hex())
-		}()
-	}
+		}
+
+		slog.Info("post-submit processing completed", "user_id", userID, "assignment_id", assignmentID.Hex())
+	}()
 
 	return nil
 }

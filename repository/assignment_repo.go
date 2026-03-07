@@ -246,6 +246,50 @@ func (r *AssignmentRepository) AddOrUpdateResponse(ctx context.Context, assignme
 	return nil
 }
 
+// SetAllResponses replaces all responses on an assignment in a single atomic operation
+// and auto-starts the assignment if it's still pending.
+func (r *AssignmentRepository) SetAllResponses(ctx context.Context, assignmentID primitive.ObjectID, responses []models.Response) error {
+	now := time.Now()
+	update := bson.M{
+		"$set": bson.M{
+			"responses": responses,
+		},
+	}
+
+	// Auto-start: set status to in_progress and started_at if currently pending
+	filter := bson.M{
+		"_id":    assignmentID,
+		"status": models.AssignmentStatusPending,
+	}
+	startUpdate := bson.M{
+		"$set": bson.M{
+			"responses":  responses,
+			"status":     models.AssignmentStatusInProgress,
+			"started_at": now,
+		},
+	}
+
+	// Try to update a pending assignment (auto-start)
+	result, err := r.collection.UpdateOne(ctx, filter, startUpdate)
+	if err != nil {
+		return fmt.Errorf("failed to set responses: %w", err)
+	}
+
+	// If not pending (already in_progress), just set responses
+	if result.MatchedCount == 0 {
+		filter = bson.M{"_id": assignmentID}
+		result, err = r.collection.UpdateOne(ctx, filter, update)
+		if err != nil {
+			return fmt.Errorf("failed to set responses: %w", err)
+		}
+		if result.MatchedCount == 0 {
+			return fmt.Errorf("assignment not found")
+		}
+	}
+
+	return nil
+}
+
 // GetCompletionStats retrieves completion statistics for a company questionnaire
 func (r *AssignmentRepository) GetCompletionStats(ctx context.Context, cqID primitive.ObjectID) (map[string]int64, error) {
 	pipeline := mongo.Pipeline{
