@@ -546,10 +546,11 @@ func (h *CompanyHandler) UpdateCompanyQuestionnaire(w http.ResponseWriter, r *ht
 	}
 
 	var req struct {
-		PeriodStart string `json:"period_start"`
-		PeriodEnd   string `json:"period_end"`
-		IsActive    *bool  `json:"is_active"`
-		DisplayMode string `json:"display_mode"`
+		PeriodStart         string  `json:"period_start"`
+		PeriodEnd           string  `json:"period_end"`
+		IsActive            *bool   `json:"is_active"`
+		DisplayMode         string  `json:"display_mode"`
+		SupersetDashboardID *string `json:"superset_dashboard_id"`
 	}
 
 	if err := utils.ParseRequestBody(r, &req); err != nil {
@@ -583,7 +584,7 @@ func (h *CompanyHandler) UpdateCompanyQuestionnaire(w http.ResponseWriter, r *ht
 	claims, _ := middleware.GetUserFromContext(r.Context())
 	isSuperAdmin := middleware.IsSuperAdmin(r.Context())
 
-	if err := h.service.UpdateCompanyQuestionnaire(r.Context(), id, periodStart, periodEnd, isActive, req.DisplayMode, claims.Sub, isSuperAdmin); err != nil {
+	if err := h.service.UpdateCompanyQuestionnaire(r.Context(), id, periodStart, periodEnd, isActive, req.DisplayMode, req.SupersetDashboardID, claims.Sub, isSuperAdmin); err != nil {
 		utils.HandleRepositoryError(w, err)
 		return
 	}

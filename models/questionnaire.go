@@ -206,7 +206,7 @@ type CompanyQuestionnaire struct {
 	LastReminderAt  *time.Time                 `bson:"last_reminder_at,omitempty" json:"last_reminder_at,omitempty"`
 	DisplayMode     DisplayMode                `bson:"display_mode,omitempty" json:"display_mode,omitempty"`
 	ColorConfig         *ColorConfig               `bson:"color_config,omitempty" json:"color_config,omitempty"`
-	SupersetDashboardID string                     `bson:"superset_dashboard_id,omitempty" json:"superset_dashboard_id,omitempty"`
+	SupersetDashboardID string                     `bson:"superset_dashboard_id" json:"superset_dashboard_id,omitempty"`
 	// Transient fields — not persisted, populated by service layer
 	QuestionnaireTitle       string `bson:"-" json:"questionnaire_title,omitempty"`
 	QuestionnaireDescription string `bson:"-" json:"questionnaire_description,omitempty"`
