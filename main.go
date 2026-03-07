@@ -73,6 +73,7 @@ func main() {
 	categoryRepo := repository.NewCategoryRepository(mongodb.Database)
 	gamificationRepo := repository.NewGamificationRepository(mongodb.Database)
 	apiTokenRepo := repository.NewAPITokenRepository(mongodb.Database)
+	adminSettingsRepo := repository.NewAdminSettingsRepository(mongodb.Database)
 
 	// Seed default gamification data
 	if err := gamificationRepo.SeedDefaultData(context.Background()); err != nil {
@@ -103,6 +104,7 @@ func main() {
 	gamificationHandler := handlers.NewGamificationHandler(gamificationService)
 	apiTokenHandler := handlers.NewAPITokenHandler(apiTokenService)
 	companyAPIHandler := handlers.NewCompanyAPIHandler(reportService)
+	adminSettingsHandler := handlers.NewAdminSettingsHandler(adminSettingsRepo)
 
 	var imageHandler *handlers.ImageHandler
 	if minioStorage != nil {
@@ -188,6 +190,9 @@ func main() {
 		r.Get("/api/v1/public/company-branding/{slug}", companyHandler.GetCompanyBrandingBySlug)
 		r.Get("/api/v1/public/company-auth-config/{slug}", companyHandler.GetCompanyAuthConfig)
 
+		// Public admin settings (no auth — admin app pre-login branding)
+		r.Get("/api/v1/public/admin-settings", adminSettingsHandler.GetSettings)
+
 		// Internal service-to-service endpoints (no JWT — cluster-internal only)
 		r.Post("/api/v1/internal/validate-api-token", apiTokenHandler.ValidateAPIToken)
 
@@ -272,6 +277,14 @@ func main() {
 				r.Post("/api/v1/questionnaire-categories", categoryHandler.CreateCategory)
 				r.Put("/api/v1/questionnaire-categories/{id}", categoryHandler.UpdateCategory)
 				r.Delete("/api/v1/questionnaire-categories/{id}", categoryHandler.DeleteCategory)
+
+				// Admin Settings
+				r.Get("/api/v1/admin/settings", adminSettingsHandler.GetSettingsFull)
+				r.Put("/api/v1/admin/settings/theme", adminSettingsHandler.UpdateTheme)
+				r.Post("/api/v1/admin/settings/presets", adminSettingsHandler.CreatePreset)
+				r.Put("/api/v1/admin/settings/presets/{presetId}", adminSettingsHandler.UpdatePreset)
+				r.Delete("/api/v1/admin/settings/presets/{presetId}", adminSettingsHandler.DeletePreset)
+				r.Post("/api/v1/admin/settings/presets/{presetId}/activate", adminSettingsHandler.ActivatePreset)
 			})
 
 			// === Gamification Admin CRUD (Super Admin only) ===
