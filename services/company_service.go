@@ -217,8 +217,12 @@ func (s *CompanyService) UpdateCompany(ctx context.Context, id primitive.ObjectI
 		company.Branding = branding
 	}
 	if customDomain != nil {
-		if customDomain.Slug != "" {
-			// Validate slug format and reserved words
+		oldSlugValue := ""
+		if company.CustomDomain != nil {
+			oldSlugValue = company.CustomDomain.Slug
+		}
+		if customDomain.Slug != "" && customDomain.Slug != oldSlugValue {
+			// Validate slug format and reserved words only if slug changed
 			if s.cloudflareService != nil {
 				if err := s.cloudflareService.ValidateSlug(customDomain.Slug); err != nil {
 					return err
