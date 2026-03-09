@@ -43,6 +43,7 @@ type CompanyService struct {
 	questionnaireRepo        *repository.QuestionnaireRepository
 	assignmentRepo           *repository.AssignmentRepository
 	userMetadataRepo         *repository.UserMetadataRepository
+	gamificationRepo         *repository.GamificationRepository
 	cloudflareService        *CloudflareService
 }
 
@@ -53,6 +54,7 @@ func NewCompanyService(
 	questionnaireRepo *repository.QuestionnaireRepository,
 	assignmentRepo *repository.AssignmentRepository,
 	userMetadataRepo *repository.UserMetadataRepository,
+	gamificationRepo *repository.GamificationRepository,
 	cloudflareService *CloudflareService,
 ) *CompanyService {
 	return &CompanyService{
@@ -61,6 +63,7 @@ func NewCompanyService(
 		questionnaireRepo:        questionnaireRepo,
 		assignmentRepo:           assignmentRepo,
 		userMetadataRepo:         userMetadataRepo,
+		gamificationRepo:         gamificationRepo,
 		cloudflareService:        cloudflareService,
 	}
 }
@@ -308,6 +311,23 @@ func (s *CompanyService) DeleteCompany(ctx context.Context, id primitive.ObjectI
 		slog.Error("failed to delete user metadata", "company_id", id.Hex(), "error", err)
 	} else {
 		slog.Info("user metadata deleted", "company_id", id.Hex(), "count", usersDeleted)
+	}
+
+	// Delete gamification data for this company
+	if pointsDel, err := s.gamificationRepo.DeleteUserPointsByCompanyID(ctx, id); err != nil {
+		slog.Error("failed to delete user points", "company_id", id.Hex(), "error", err)
+	} else if pointsDel > 0 {
+		slog.Info("user points deleted", "company_id", id.Hex(), "count", pointsDel)
+	}
+	if badgesDel, err := s.gamificationRepo.DeleteUserBadgesByCompanyID(ctx, id); err != nil {
+		slog.Error("failed to delete user badges", "company_id", id.Hex(), "error", err)
+	} else if badgesDel > 0 {
+		slog.Info("user badges deleted", "company_id", id.Hex(), "count", badgesDel)
+	}
+	if streaksDel, err := s.gamificationRepo.DeleteUserStreaksByCompanyID(ctx, id); err != nil {
+		slog.Error("failed to delete user streaks", "company_id", id.Hex(), "error", err)
+	} else if streaksDel > 0 {
+		slog.Info("user streaks deleted", "company_id", id.Hex(), "count", streaksDel)
 	}
 
 	return s.companyRepo.Delete(ctx, id)

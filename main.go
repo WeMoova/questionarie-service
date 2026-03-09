@@ -83,7 +83,7 @@ func main() {
 	// Initialize services
 	questionnaireService := services.NewQuestionnaireService(questionnaireRepo)
 	cloudflareService := services.NewCloudflareService()
-	companyService := services.NewCompanyService(companyRepo, companyQuestionnaireRepo, questionnaireRepo, assignmentRepo, userMetadataRepo, cloudflareService)
+	companyService := services.NewCompanyService(companyRepo, companyQuestionnaireRepo, questionnaireRepo, assignmentRepo, userMetadataRepo, gamificationRepo, cloudflareService)
 	userMetadataService := services.NewUserMetadataService(userMetadataRepo, companyRepo)
 	gamificationService := services.NewGamificationService(gamificationRepo, userMetadataRepo)
 	evaluationService := services.NewEvaluationService(questionnaireRepo, assignmentRepo)

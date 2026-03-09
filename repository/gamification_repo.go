@@ -491,3 +491,32 @@ func (r *GamificationRepository) SeedDefaultData(ctx context.Context) error {
 
 	return nil
 }
+
+// ── Company Cleanup ─────────────────────────────────────────────────────────
+
+// DeleteUserPointsByCompanyID deletes all user_points for a company
+func (r *GamificationRepository) DeleteUserPointsByCompanyID(ctx context.Context, companyID primitive.ObjectID) (int64, error) {
+	result, err := r.userPoints.DeleteMany(ctx, bson.M{"company_id": companyID})
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete user points: %w", err)
+	}
+	return result.DeletedCount, nil
+}
+
+// DeleteUserBadgesByCompanyID deletes all user_badges for a company
+func (r *GamificationRepository) DeleteUserBadgesByCompanyID(ctx context.Context, companyID primitive.ObjectID) (int64, error) {
+	result, err := r.userBadges.DeleteMany(ctx, bson.M{"company_id": companyID})
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete user badges: %w", err)
+	}
+	return result.DeletedCount, nil
+}
+
+// DeleteUserStreaksByCompanyID deletes all user_streaks for a company
+func (r *GamificationRepository) DeleteUserStreaksByCompanyID(ctx context.Context, companyID primitive.ObjectID) (int64, error) {
+	result, err := r.userStreaks.DeleteMany(ctx, bson.M{"company_id": companyID})
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete user streaks: %w", err)
+	}
+	return result.DeletedCount, nil
+}
