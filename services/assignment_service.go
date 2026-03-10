@@ -695,6 +695,12 @@ func (s *AssignmentService) GetMyQuestionnaires(ctx context.Context, userID stri
 			continue
 		}
 
+		// Only show questionnaires the user is actually assigned to
+		assignment, err := s.assignmentRepo.GetByUserAndCQ(ctx, userID, cq.ID)
+		if err != nil || assignment == nil {
+			continue
+		}
+
 		displayMode := string(cq.DisplayMode)
 		if displayMode == "" {
 			displayMode = "step_by_step"
@@ -704,7 +710,8 @@ func (s *AssignmentService) GetMyQuestionnaires(ctx context.Context, userID stri
 			"company_questionnaire_id": cq.ID.Hex(),
 			"period_start":             cq.PeriodStart,
 			"period_end":               cq.PeriodEnd,
-			"assignment_status":        "not_started",
+			"assignment_id":            assignment.ID.Hex(),
+			"assignment_status":        string(assignment.Status),
 			"display_mode":             displayMode,
 		}
 
@@ -720,13 +727,6 @@ func (s *AssignmentService) GetMyQuestionnaires(ctx context.Context, userID stri
 					item["questionnaire_category"] = cat.Name
 				}
 			}
-		}
-
-		// Check if user has an existing assignment
-		assignment, err := s.assignmentRepo.GetByUserAndCQ(ctx, userID, cq.ID)
-		if err == nil && assignment != nil {
-			item["assignment_id"] = assignment.ID.Hex()
-			item["assignment_status"] = string(assignment.Status)
 		}
 
 		result = append(result, item)
