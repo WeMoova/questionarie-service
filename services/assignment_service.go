@@ -268,6 +268,7 @@ func (s *AssignmentService) enrichAssignments(ctx context.Context, assignments [
 		} else {
 			a.DisplayMode = "step_by_step"
 		}
+		a.ShowInstructions = cq.ShowInstructions
 	}
 }
 
@@ -713,6 +714,7 @@ func (s *AssignmentService) GetMyQuestionnaires(ctx context.Context, userID stri
 			"assignment_id":            assignment.ID.Hex(),
 			"assignment_status":        string(assignment.Status),
 			"display_mode":             displayMode,
+			"show_instructions":        cq.ShowInstructions,
 		}
 
 		// Enrich with questionnaire data

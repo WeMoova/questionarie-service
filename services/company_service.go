@@ -353,6 +353,7 @@ func (s *CompanyService) AssignQuestionnaireToCompany(
 	assignedBy string,
 	periodStart, periodEnd time.Time,
 	displayMode string,
+	showInstructions bool,
 ) (*models.CompanyQuestionnaire, error) {
 	// Validate company exists
 	if _, err := s.companyRepo.GetByID(ctx, companyID); err != nil {
@@ -390,6 +391,7 @@ func (s *CompanyService) AssignQuestionnaireToCompany(
 	if displayMode != "" {
 		cq.DisplayMode = models.DisplayMode(displayMode)
 	}
+	cq.ShowInstructions = showInstructions
 
 	if err := s.companyQuestionnaireRepo.Create(ctx, cq); err != nil {
 		return nil, fmt.Errorf("failed to assign questionnaire: %w", err)
@@ -423,7 +425,7 @@ func (s *CompanyService) GetActiveCompanyQuestionnaires(ctx context.Context, com
 }
 
 // UpdateCompanyQuestionnaire updates a company questionnaire assignment period
-func (s *CompanyService) UpdateCompanyQuestionnaire(ctx context.Context, id primitive.ObjectID, periodStart, periodEnd time.Time, isActive bool, displayMode string, supersetDashboardID *string, userID string, isSuperAdmin bool) error {
+func (s *CompanyService) UpdateCompanyQuestionnaire(ctx context.Context, id primitive.ObjectID, periodStart, periodEnd time.Time, isActive bool, displayMode string, supersetDashboardID *string, showInstructions *bool, userID string, isSuperAdmin bool) error {
 	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, id)
 	if err != nil {
 		return err
@@ -455,6 +457,10 @@ func (s *CompanyService) UpdateCompanyQuestionnaire(ctx context.Context, id prim
 
 	if supersetDashboardID != nil {
 		cq.SupersetDashboardID = *supersetDashboardID
+	}
+
+	if showInstructions != nil {
+		cq.ShowInstructions = *showInstructions
 	}
 
 	cq.IsActive = isActive
