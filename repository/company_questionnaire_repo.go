@@ -120,6 +120,7 @@ func (r *CompanyQuestionnaireRepository) Update(ctx context.Context, id primitiv
 			"status_history":        cq.StatusHistory,
 			"display_mode":          cq.DisplayMode,
 			"superset_dashboard_id": cq.SupersetDashboardID,
+			"show_instructions":     cq.ShowInstructions,
 		},
 	}
 
