@@ -691,8 +691,8 @@ func (s *AssignmentService) GetMyQuestionnaires(ctx context.Context, userID stri
 
 	result := make([]map[string]interface{}, 0, len(cqs))
 	for _, cq := range cqs {
-		// Only show active CQs to employees
-		if cq.Status != models.CQStatusActive {
+		// Only show active CQs within their period to employees
+		if cq.Status != models.CQStatusActive || !cq.IsWithinPeriod() {
 			continue
 		}
 
