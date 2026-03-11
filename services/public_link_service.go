@@ -89,6 +89,7 @@ func (s *PublicLinkService) CreateLink(ctx context.Context, cqID primitive.Objec
 
 	link.CompanyQuestionnaireID = cqID
 	link.CompanyID = cq.CompanyID
+	link.IsActive = true
 	link.ResponseCount = 0
 
 	return s.linkRepo.Create(ctx, link)
