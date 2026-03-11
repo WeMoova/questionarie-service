@@ -91,6 +91,9 @@ func main() {
 	reportService := services.NewReportService(assignmentRepo, companyQuestionnaireRepo, userMetadataRepo, questionnaireRepo, companyRepo)
 	categoryService := services.NewCategoryService(categoryRepo, questionnaireRepo)
 	apiTokenService := services.NewAPITokenService(apiTokenRepo, companyRepo)
+	publicLinkRepo := repository.NewPublicLinkRepository(mongodb.Database)
+	publicLinkRepo.EnsureIndexes(context.Background())
+	publicLinkService := services.NewPublicLinkService(publicLinkRepo, assignmentRepo, companyQuestionnaireRepo, questionnaireRepo, companyRepo)
 
 	// Initialize handlers
 	questionnaireHandler := handlers.NewQuestionnaireHandler(questionnaireService, categoryService, companyService)
@@ -105,6 +108,8 @@ func main() {
 	apiTokenHandler := handlers.NewAPITokenHandler(apiTokenService)
 	companyAPIHandler := handlers.NewCompanyAPIHandler(reportService)
 	adminSettingsHandler := handlers.NewAdminSettingsHandler(adminSettingsRepo)
+	publicLinkHandler := handlers.NewPublicLinkHandler(publicLinkService)
+	publicQHandler := handlers.NewPublicQuestionnaireHandler(publicLinkService)
 
 	var imageHandler *handlers.ImageHandler
 	if minioStorage != nil {
@@ -189,6 +194,19 @@ func main() {
 		// Public company branding (no auth — employee app pre-login)
 		r.Get("/api/v1/public/company-branding/{slug}", companyHandler.GetCompanyBrandingBySlug)
 		r.Get("/api/v1/public/company-auth-config/{slug}", companyHandler.GetCompanyAuthConfig)
+		r.Get("/api/v1/public/company-branding-by-domain/{domain}", companyHandler.GetBrandingByDomain)
+
+		// Public questionnaire endpoints (no auth — anonymous access)
+		r.Get("/api/v1/public/q/{slug}", publicQHandler.GetLinkInfo)
+		r.Get("/api/v1/public/q/{slug}/questions", publicQHandler.GetQuestions)
+		r.Post("/api/v1/public/q/{slug}/start", publicQHandler.StartSession)
+
+		// Session token auth group (anonymous responses)
+		r.Group(func(r chi.Router) {
+			r.Use(authMiddleware.SessionTokenAuth)
+			r.Post("/api/v1/public/q/{slug}/responses", publicQHandler.SaveResponses)
+			r.Post("/api/v1/public/q/{slug}/submit", publicQHandler.SubmitSession)
+		})
 
 		// Public admin settings (no auth — admin app pre-login branding)
 		r.Get("/api/v1/public/admin-settings", adminSettingsHandler.GetSettings)
@@ -259,6 +277,9 @@ func main() {
 				r.Get("/api/v1/companies/{id}", companyHandler.GetCompanyByID)
 				r.Put("/api/v1/companies/{id}", companyHandler.UpdateCompany)
 				r.Delete("/api/v1/companies/{id}", companyHandler.DeleteCompany)
+
+				// Domain verification
+				r.Post("/api/v1/companies/{id}/verify-domain", companyHandler.VerifyDomain)
 
 				// Assign questionnaire to company
 				r.Post("/api/v1/companies/{company_id}/questionnaires", companyHandler.AssignQuestionnaireToCompany)
@@ -363,6 +384,12 @@ func main() {
 				r.Get("/api/v1/company-questionnaires/{id}", companyHandler.GetCompanyQuestionnaire)
 				r.Put("/api/v1/company-questionnaires/{id}", companyHandler.UpdateCompanyQuestionnaire)
 				r.Delete("/api/v1/company-questionnaires/{id}", companyHandler.DeleteCompanyQuestionnaire)
+
+				// Public links
+				r.Post("/api/v1/company-questionnaires/{id}/public-links", publicLinkHandler.CreateLink)
+				r.Get("/api/v1/company-questionnaires/{id}/public-links", publicLinkHandler.ListLinks)
+				r.Put("/api/v1/public-links/{id}", publicLinkHandler.UpdateLink)
+				r.Delete("/api/v1/public-links/{id}", publicLinkHandler.DeleteLink)
 
 				// Color config
 				r.Get("/api/v1/company-questionnaires/{id}/color-config", companyHandler.GetColorConfig)

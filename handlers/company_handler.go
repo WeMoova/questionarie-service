@@ -3,12 +3,15 @@ package handlers
 import (
 	"context"
 	"log/slog"
+	"net"
 	"net/http"
+	"os"
 	"questionarie-service/middleware"
 	"questionarie-service/models"
 	"questionarie-service/services"
 	"questionarie-service/utils"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -661,6 +664,124 @@ func (h *CompanyHandler) UpdateColorConfig(w http.ResponseWriter, r *http.Reques
 	}
 
 	utils.RespondWithSuccess(w, http.StatusOK, result, "Color config updated successfully")
+}
+
+// VerifyDomain handles POST /api/v1/companies/{id}/verify-domain
+// Performs DNS lookup to verify a company's custom domain points to the WeMoova server.
+func (h *CompanyHandler) VerifyDomain(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := utils.ValidateObjectID(idStr)
+	if err != nil {
+		utils.BadRequest(w, err.Error())
+		return
+	}
+
+	company, err := h.service.GetCompanyByID(r.Context(), id)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	if company.CustomDomain == nil || company.CustomDomain.CustomDomain == "" {
+		utils.BadRequest(w, "company has no custom domain configured")
+		return
+	}
+
+	domain := company.CustomDomain.CustomDomain
+
+	// Determine expected server IP
+	expectedIP := os.Getenv("CLOUDFLARE_SERVER_IP")
+	if expectedIP == "" {
+		expectedIP = "72.62.137.166"
+	}
+
+	dnsStatus := "error"
+	isVerified := false
+	dnsError := ""
+	sslStatus := "pending"
+
+	// Check A records — does the domain resolve to our IP?
+	ips, err := net.LookupHost(domain)
+	if err != nil {
+		dnsError = "DNS lookup failed: " + err.Error()
+	} else {
+		for _, ip := range ips {
+			if ip == expectedIP {
+				isVerified = true
+				dnsStatus = "active"
+				sslStatus = "active"
+				break
+			}
+		}
+
+		// If not found by IP, check CNAME for app.wemoova.com
+		if !isVerified {
+			cname, err := net.LookupCNAME(domain)
+			if err == nil && strings.Contains(strings.ToLower(cname), "app.wemoova.com") {
+				isVerified = true
+				dnsStatus = "active"
+				sslStatus = "active"
+			}
+		}
+
+		if !isVerified {
+			dnsError = "domain does not point to " + expectedIP + " (resolved: " + strings.Join(ips, ", ") + ")"
+		}
+	}
+
+	// Persist verification result
+	if err := h.service.UpdateCustomDomainVerification(r.Context(), id, dnsStatus, isVerified, dnsError, sslStatus); err != nil {
+		slog.Error("failed to update domain verification", "company_id", id.Hex(), "error", err)
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, map[string]interface{}{
+		"domain":      domain,
+		"is_verified": isVerified,
+		"dns_status":  dnsStatus,
+		"dns_error":   dnsError,
+		"ssl_status":  sslStatus,
+		"resolved_ips": func() []string {
+			if ips != nil {
+				return ips
+			}
+			return []string{}
+		}(),
+	}, "Domain verification completed")
+}
+
+// GetBrandingByDomain handles GET /api/v1/public/company-branding-by-domain/{domain}
+// Public endpoint — returns branding for a company identified by custom domain.
+func (h *CompanyHandler) GetBrandingByDomain(w http.ResponseWriter, r *http.Request) {
+	domain := chi.URLParam(r, "domain")
+	if domain == "" {
+		utils.BadRequest(w, "domain is required")
+		return
+	}
+
+	company, err := h.service.GetCompanyByCustomDomain(r.Context(), domain)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusNotFound, "company not found for domain")
+		return
+	}
+
+	if !company.IsActive {
+		utils.RespondWithError(w, http.StatusNotFound, "company not found for domain")
+		return
+	}
+
+	result := map[string]interface{}{
+		"company_name": company.Name,
+	}
+	if company.Branding != nil {
+		result["branding"] = company.Branding
+	}
+	if company.CustomDomain != nil {
+		result["slug"] = company.CustomDomain.Slug
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, result, "")
 }
 
 // GetCompanyAuthConfig handles GET /api/v1/public/company-auth-config/{slug}

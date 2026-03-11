@@ -959,3 +959,28 @@ func (s *CompanyService) UpdateColorConfig(ctx context.Context, cqID primitive.O
 		return nil, fmt.Errorf("invalid color mode: %s", input.Mode)
 	}
 }
+
+// GetCompanyByCustomDomain retrieves a company by its custom domain
+func (s *CompanyService) GetCompanyByCustomDomain(ctx context.Context, domain string) (*models.Company, error) {
+	if domain == "" {
+		return nil, fmt.Errorf("domain is required")
+	}
+	return s.companyRepo.GetByCustomDomain(ctx, domain)
+}
+
+// UpdateCustomDomainVerification updates the DNS/SSL verification fields on a company's custom domain
+func (s *CompanyService) UpdateCustomDomainVerification(ctx context.Context, id primitive.ObjectID, dnsStatus string, isVerified bool, dnsError string, sslStatus string) error {
+	company, err := s.companyRepo.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if company.CustomDomain == nil {
+		return fmt.Errorf("company has no custom domain configured")
+	}
+	company.CustomDomain.DNSStatus = dnsStatus
+	company.CustomDomain.IsVerified = isVerified
+	company.CustomDomain.DNSError = dnsError
+	company.CustomDomain.SSLStatus = sslStatus
+	company.UpdatedAt = time.Now()
+	return s.companyRepo.Update(ctx, id, company)
+}
