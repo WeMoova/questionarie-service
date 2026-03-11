@@ -350,6 +350,14 @@ func (s *PublicLinkService) SubmitAnonymous(ctx context.Context, claims *middlew
 		}
 	}
 
+	// For risk_profile mode, evaluate the questionnaire and find the matching screen.
+	if link.ResultConfig.Mode == "risk_profile" && len(link.ResultConfig.ResultScreens) > 0 {
+		matchingScreen := s.evaluateRiskProfile(ctx, assignment, link)
+		if matchingScreen != nil {
+			result["matching_screen"] = matchingScreen
+		}
+	}
+
 	return result, nil
 }
 
@@ -396,6 +404,179 @@ func (s *PublicLinkService) calculateScore(responses []models.Response) float64 
 		return 0
 	}
 	return sum / float64(count)
+}
+
+// evaluateRiskProfile runs the questionnaire's evaluation config against the
+// assignment responses, matches risk profiles, and returns the first ResultScreen
+// whose profile_name matches a triggered risk profile.
+func (s *PublicLinkService) evaluateRiskProfile(ctx context.Context, assignment *models.UserQuestionnaireAssignment, link *models.PublicLink) *models.ResultScreen {
+	cq, err := s.cqRepo.GetByID(ctx, link.CompanyQuestionnaireID)
+	if err != nil {
+		return nil
+	}
+
+	q, err := s.questionnaireRepo.GetByID(ctx, cq.QuestionnaireID)
+	if err != nil || q.EvaluationConfig == nil || !q.EvaluationConfig.Enabled {
+		return nil
+	}
+
+	evalConfig := q.EvaluationConfig
+
+	// Build question → dimension map
+	questionDimension := make(map[string]string)
+	questionMap := make(map[string]models.Question)
+	for _, question := range q.Questions {
+		questionMap[question.QuestionID] = question
+		if question.DimensionCode != "" {
+			questionDimension[question.QuestionID] = question.DimensionCode
+		}
+	}
+
+	// Build response values (reusing evaluation logic)
+	responseValues := make(map[string]float64)
+	for _, r := range assignment.Responses {
+		val := r.GetValue()
+		if val == nil {
+			continue
+		}
+		qDef := questionMap[r.QuestionID]
+		switch v := val.(type) {
+		case float64:
+			if qDef.QuestionType == models.QuestionTypeMultipleChoice {
+				if score, ok := lookupChoiceScore(qDef.Options, v, ""); ok {
+					responseValues[r.QuestionID] = score
+					continue
+				}
+			}
+			responseValues[r.QuestionID] = v
+		case int:
+			responseValues[r.QuestionID] = float64(v)
+		case int32:
+			responseValues[r.QuestionID] = float64(v)
+		case int64:
+			responseValues[r.QuestionID] = float64(v)
+		case string:
+			if score, ok := lookupChoiceScore(qDef.Options, 0, v); ok {
+				responseValues[r.QuestionID] = score
+			}
+		case []interface{}:
+			var total float64
+			for _, item := range v {
+				if str, ok := item.(string); ok {
+					if score, ok := lookupChoiceScore(qDef.Options, 0, str); ok {
+						total += score
+					}
+				}
+			}
+			responseValues[r.QuestionID] = total
+		}
+	}
+
+	// Calculate dimension scores
+	dimScores := make(map[string]float64)
+	dimLevels := make(map[string]string)
+	for _, dim := range evalConfig.Dimensions {
+		var sum float64
+		count := 0
+		for qID, dimCode := range questionDimension {
+			if dimCode != dim.Code {
+				continue
+			}
+			if val, ok := responseValues[qID]; ok {
+				sum += val
+				count++
+			}
+		}
+		var rawScore float64
+		if count > 0 {
+			if evalConfig.ScoringMethod == "average" {
+				rawScore = sum / float64(count)
+			} else {
+				rawScore = sum
+			}
+		}
+		dimScores[dim.Code] = rawScore
+
+		// Determine level
+		intScore := int(rawScore)
+		for _, t := range dim.Thresholds {
+			matches := true
+			if t.MinScore != nil && intScore < *t.MinScore {
+				matches = false
+			}
+			if t.MaxScore != nil && intScore > *t.MaxScore {
+				matches = false
+			}
+			if matches {
+				dimLevels[dim.Code] = t.Level
+				break
+			}
+		}
+	}
+
+	// Evaluate risk profiles — find the first that matches
+	var matchedProfileName string
+	for _, profile := range evalConfig.RiskProfiles {
+		if checkRiskConditions(profile, dimScores, dimLevels) {
+			matchedProfileName = profile.Name
+			break
+		}
+	}
+
+	if matchedProfileName == "" {
+		return nil
+	}
+
+	// Find the ResultScreen for this profile
+	for i := range link.ResultConfig.ResultScreens {
+		if link.ResultConfig.ResultScreens[i].ProfileName == matchedProfileName {
+			return &link.ResultConfig.ResultScreens[i]
+		}
+	}
+
+	return nil
+}
+
+// checkRiskConditions checks if a risk profile's conditions are met given dimension scores/levels.
+func checkRiskConditions(profile models.RiskProfile, dimScores map[string]float64, dimLevels map[string]string) bool {
+	if len(profile.Conditions) == 0 {
+		return false
+	}
+
+	for _, cond := range profile.Conditions {
+		met := false
+		switch cond.Operator {
+		case "level_in":
+			level := dimLevels[cond.DimensionCode]
+			for _, v := range cond.Values {
+				if v == level {
+					met = true
+					break
+				}
+			}
+		case "score_gt":
+			if len(cond.Values) > 0 {
+				threshold := 0.0
+				fmt.Sscanf(cond.Values[0], "%f", &threshold)
+				met = dimScores[cond.DimensionCode] > threshold
+			}
+		case "score_lt":
+			if len(cond.Values) > 0 {
+				threshold := 0.0
+				fmt.Sscanf(cond.Values[0], "%f", &threshold)
+				met = dimScores[cond.DimensionCode] < threshold
+			}
+		}
+
+		if profile.Logic == "any" && met {
+			return true
+		}
+		if profile.Logic == "all" && !met {
+			return false
+		}
+	}
+
+	return profile.Logic == "all"
 }
 
 // findMatchingRange returns the first ScoreRange where score >= min && score < max.
