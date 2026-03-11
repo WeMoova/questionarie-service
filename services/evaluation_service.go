@@ -46,23 +46,36 @@ func (s *EvaluationService) EvaluateAssignment(ctx context.Context, assignmentID
 
 	evalConfig := questionnaire.EvaluationConfig
 
-	// Build map: questionID → dimensionCode
+	// Build map: questionID → Question (for option lookups)
+	questionMap := make(map[string]models.Question)
 	questionDimension := make(map[string]string)
 	for _, q := range questionnaire.Questions {
+		questionMap[q.QuestionID] = q
 		if q.DimensionCode != "" {
 			questionDimension[q.QuestionID] = q.DimensionCode
 		}
 	}
 
 	// Build map: questionID → numeric response value
+	// Supports: scalar numbers, multiple_choice with per-option scores, multiselect arrays
 	responseValues := make(map[string]float64)
 	for _, r := range assignment.Responses {
 		val := r.GetValue()
 		if val == nil {
 			continue
 		}
+
+		q := questionMap[r.QuestionID]
+
 		switch v := val.(type) {
 		case float64:
+			// For multiple_choice with choices that have scores, look up the score
+			if q.QuestionType == models.QuestionTypeMultipleChoice {
+				if score, ok := lookupChoiceScore(q.Options, v, ""); ok {
+					responseValues[r.QuestionID] = score
+					continue
+				}
+			}
 			responseValues[r.QuestionID] = v
 		case int:
 			responseValues[r.QuestionID] = float64(v)
@@ -70,6 +83,22 @@ func (s *EvaluationService) EvaluateAssignment(ctx context.Context, assignmentID
 			responseValues[r.QuestionID] = float64(v)
 		case int64:
 			responseValues[r.QuestionID] = float64(v)
+		case string:
+			// multiple_choice with string value — look up score from choices
+			if score, ok := lookupChoiceScore(q.Options, 0, v); ok {
+				responseValues[r.QuestionID] = score
+			}
+		case []interface{}:
+			// multiselect — sum scores of all selected values
+			var total float64
+			for _, item := range v {
+				if str, ok := item.(string); ok {
+					if score, ok := lookupChoiceScore(q.Options, 0, str); ok {
+						total += score
+					}
+				}
+			}
+			responseValues[r.QuestionID] = total
 		}
 	}
 
@@ -138,4 +167,66 @@ func determineLevel(score float64, thresholds []models.ScoreThreshold) (level, l
 		}
 	}
 	return "unknown", "N/A", "#6b7280"
+}
+
+// lookupChoiceScore looks up the score for a selected choice in question options.
+// Options format: {"choices": [{"value": "x", "label": "...", "score": 3}, ...]}
+// If strVal is non-empty, matches by value string; otherwise matches by numVal.
+// Returns (score, true) if found, (0, false) if choices don't have scores.
+func lookupChoiceScore(options map[string]interface{}, numVal float64, strVal string) (float64, bool) {
+	choicesRaw, ok := options["choices"]
+	if !ok {
+		return 0, false
+	}
+	choices, ok := choicesRaw.([]interface{})
+	if !ok {
+		// choices is a simple string array — no scores
+		return 0, false
+	}
+
+	for _, c := range choices {
+		choice, ok := c.(map[string]interface{})
+		if !ok {
+			// simple string choice — no scores
+			return 0, false
+		}
+		scoreRaw, hasScore := choice["score"]
+		if !hasScore {
+			return 0, false
+		}
+
+		// Match by string value
+		if strVal != "" {
+			if v, ok := choice["value"].(string); ok && v == strVal {
+				return toFloat64(scoreRaw), true
+			}
+			// Also match by label for backwards compatibility
+			if l, ok := choice["label"].(string); ok && l == strVal {
+				return toFloat64(scoreRaw), true
+			}
+			continue
+		}
+
+		// Match by numeric value
+		if v := toFloat64(choice["value"]); v == numVal {
+			return toFloat64(scoreRaw), true
+		}
+	}
+	return 0, false
+}
+
+// toFloat64 converts an interface{} to float64 (handles int, float64, int32, int64)
+func toFloat64(v interface{}) float64 {
+	switch n := v.(type) {
+	case float64:
+		return n
+	case int:
+		return float64(n)
+	case int32:
+		return float64(n)
+	case int64:
+		return float64(n)
+	default:
+		return 0
+	}
 }

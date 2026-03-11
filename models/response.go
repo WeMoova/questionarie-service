@@ -58,6 +58,24 @@ func (r *Response) SetMultipleChoiceResponse(selected string) {
 	r.AnsweredAt = time.Now()
 }
 
+// SetMultiSelectResponse sets a multiselect response value (array of selected values)
+func (r *Response) SetMultiSelectResponse(selected []string) {
+	r.ResponseValue = map[string]interface{}{
+		"value": selected,
+		"type":  "multiselect",
+	}
+	r.AnsweredAt = time.Now()
+}
+
+// SetNumberResponse sets a numeric input response value
+func (r *Response) SetNumberResponse(value float64) {
+	r.ResponseValue = map[string]interface{}{
+		"value": value,
+		"type":  "number",
+	}
+	r.AnsweredAt = time.Now()
+}
+
 // GetValue retrieves the response value
 func (r *Response) GetValue() interface{} {
 	if r.ResponseValue == nil {
