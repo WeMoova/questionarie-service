@@ -146,6 +146,16 @@ func (r *CompanyRepository) GetBySlug(ctx context.Context, slug string) (*models
 	return &company, nil
 }
 
+// GetByCustomDomain finds a company by its custom domain
+func (r *CompanyRepository) GetByCustomDomain(ctx context.Context, domain string) (*models.Company, error) {
+	var company models.Company
+	err := r.collection.FindOne(ctx, bson.M{"custom_domain.custom_domain": domain}).Decode(&company)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get company by custom domain: %w", err)
+	}
+	return &company, nil
+}
+
 // SearchByName searches companies by name (case-insensitive)
 func (r *CompanyRepository) SearchByName(ctx context.Context, name string) ([]*models.Company, error) {
 	filter := bson.M{
