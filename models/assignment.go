@@ -32,6 +32,10 @@ type UserQuestionnaireAssignment struct {
 	DueDate                *time.Time         `bson:"due_date,omitempty" json:"due_date,omitempty"`
 	Responses              []Response         `bson:"responses" json:"responses"`
 	EvaluationResult       *EvaluationResult  `bson:"evaluation_result,omitempty" json:"evaluation_result,omitempty"`
+	// Anonymous/public link fields
+	IsAnonymous     bool               `bson:"is_anonymous,omitempty" json:"is_anonymous,omitempty"`
+	PublicLinkID    primitive.ObjectID `bson:"public_link_id,omitempty" json:"public_link_id,omitempty"`
+	DemographicData map[string]string  `bson:"demographic_data,omitempty" json:"demographic_data,omitempty"`
 	// Transient fields — not persisted, populated by service layer
 	QuestionnaireTitle       string `bson:"-" json:"questionnaire_title,omitempty"`
 	QuestionnaireDescription string `bson:"-" json:"questionnaire_description,omitempty"`

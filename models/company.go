@@ -25,6 +25,7 @@ type CustomDomain struct {
 	IsVerified   bool   `bson:"is_verified" json:"is_verified"`
 	DNSStatus    string `bson:"dns_status,omitempty" json:"dns_status,omitempty"` // "pending", "active", "error"
 	DNSError     string `bson:"dns_error,omitempty" json:"dns_error,omitempty"`
+	SSLStatus    string `bson:"ssl_status,omitempty" json:"ssl_status,omitempty"` // "pending", "active", "error"
 }
 
 // CompanySettings holds configurable behavior for a company
