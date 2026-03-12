@@ -421,11 +421,22 @@ func (s *AssignmentService) SubmitAssignment(ctx context.Context, assignmentID p
 		return err
 	}
 
-	// Build set of required question IDs for O(1) lookup
+	// Build response map for skip logic: questionID → string value
+	responseStrings := make(map[string]string)
+	for _, r := range assignment.Responses {
+		responseStrings[r.QuestionID] = r.GetStringValue()
+	}
+
+	// Compute which questions are visible given skip logic
+	visibleIDs := models.VisibleQuestionIDs(questionnaire.Questions, responseStrings)
+
+	// Build set of required + visible question IDs
 	requiredIDs := make(map[string]struct{})
 	for _, q := range questionnaire.Questions {
 		if q.IsRequired {
-			requiredIDs[q.QuestionID] = struct{}{}
+			if _, visible := visibleIDs[q.QuestionID]; visible {
+				requiredIDs[q.QuestionID] = struct{}{}
+			}
 		}
 	}
 

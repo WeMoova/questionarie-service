@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -82,4 +83,32 @@ func (r *Response) GetValue() interface{} {
 		return nil
 	}
 	return r.ResponseValue["value"]
+}
+
+// GetStringValue returns the response value as a string (for skip logic matching).
+// For multiple_choice it returns the selected string value.
+// For other types it attempts a string conversion via fmt.Sprintf.
+func (r *Response) GetStringValue() string {
+	v := r.GetValue()
+	if v == nil {
+		return ""
+	}
+	switch val := v.(type) {
+	case string:
+		return val
+	case float64:
+		if val == float64(int(val)) {
+			return fmt.Sprintf("%d", int(val))
+		}
+		return fmt.Sprintf("%g", val)
+	case int:
+		return fmt.Sprintf("%d", val)
+	case bool:
+		if val {
+			return "true"
+		}
+		return "false"
+	default:
+		return fmt.Sprintf("%v", val)
+	}
 }

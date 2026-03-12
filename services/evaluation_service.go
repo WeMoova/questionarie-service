@@ -46,10 +46,20 @@ func (s *EvaluationService) EvaluateAssignment(ctx context.Context, assignmentID
 
 	evalConfig := questionnaire.EvaluationConfig
 
-	// Build map: questionID → Question (for option lookups)
+	// Compute visible questions based on skip logic + responses
+	responseStrings := make(map[string]string)
+	for _, r := range assignment.Responses {
+		responseStrings[r.QuestionID] = r.GetStringValue()
+	}
+	visibleIDs := models.VisibleQuestionIDs(questionnaire.Questions, responseStrings)
+
+	// Build map: questionID → Question (for option lookups), only visible questions
 	questionMap := make(map[string]models.Question)
 	questionDimension := make(map[string]string)
 	for _, q := range questionnaire.Questions {
+		if _, visible := visibleIDs[q.QuestionID]; !visible {
+			continue
+		}
 		questionMap[q.QuestionID] = q
 		if q.DimensionCode != "" {
 			questionDimension[q.QuestionID] = q.DimensionCode

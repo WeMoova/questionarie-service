@@ -422,10 +422,20 @@ func (s *PublicLinkService) evaluateRiskProfile(ctx context.Context, assignment 
 
 	evalConfig := q.EvaluationConfig
 
-	// Build question → dimension map
+	// Compute visible questions based on skip logic
+	responseStrings := make(map[string]string)
+	for _, r := range assignment.Responses {
+		responseStrings[r.QuestionID] = r.GetStringValue()
+	}
+	visibleIDs := models.VisibleQuestionIDs(q.Questions, responseStrings)
+
+	// Build question → dimension map (only visible questions)
 	questionDimension := make(map[string]string)
 	questionMap := make(map[string]models.Question)
 	for _, question := range q.Questions {
+		if _, visible := visibleIDs[question.QuestionID]; !visible {
+			continue
+		}
 		questionMap[question.QuestionID] = question
 		if question.DimensionCode != "" {
 			questionDimension[question.QuestionID] = question.DimensionCode
