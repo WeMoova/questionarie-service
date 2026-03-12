@@ -35,11 +35,21 @@ type DimensionConfig struct {
 	Thresholds       []ScoreThreshold `bson:"thresholds" json:"thresholds"`
 }
 
-// RiskCondition defines a single condition for evaluating a risk profile
+// RiskCondition defines a single condition for evaluating a risk profile.
+// It can be a dimension-level condition (DimensionCode + Operator + Values),
+// a question-level condition (QuestionOrderIndex + Operator + Values),
+// or a group of nested sub-conditions (Logic + SubConditions).
 type RiskCondition struct {
-	DimensionCode string   `bson:"dimension_code" json:"dimension_code"`
-	Operator      string   `bson:"operator" json:"operator"` // "level_in", "score_gt", "score_lt"
-	Values        []string `bson:"values" json:"values"`
+	// Dimension-level: check dimension score/level
+	DimensionCode string `bson:"dimension_code,omitempty" json:"dimension_code,omitempty"`
+	// Question-level: check individual question response by order_index
+	QuestionOrderIndex *int `bson:"question_order_index,omitempty" json:"question_order_index,omitempty"`
+	// Operator: "level_in", "score_gt", "score_lt" (dimension); "eq", "in" (question)
+	Operator string   `bson:"operator,omitempty" json:"operator,omitempty"`
+	Values   []string `bson:"values,omitempty" json:"values,omitempty"`
+	// Nested sub-conditions group
+	Logic         string          `bson:"logic,omitempty" json:"logic,omitempty"` // "all" (AND) or "any" (OR)
+	SubConditions []RiskCondition `bson:"sub_conditions,omitempty" json:"sub_conditions,omitempty"`
 }
 
 // RiskProfile defines a configurable risk pattern across multiple dimensions

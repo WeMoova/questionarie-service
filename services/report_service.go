@@ -1460,13 +1460,26 @@ func (s *ReportService) GetRiskAnalysis(ctx context.Context, cqID primitive.Obje
 		}
 	}
 
+	// Build questionID → order_index map for question-level conditions
+	qOrderMap := make(map[string]int)
+	for _, q := range questionnaire.Questions {
+		qOrderMap[q.QuestionID] = q.OrderIndex
+	}
+
 	totalEval := len(evaluated)
 	results := make([]RiskProfileResult, 0, len(questionnaire.EvaluationConfig.RiskProfiles))
 
 	for _, rp := range questionnaire.EvaluationConfig.RiskProfiles {
 		affected := 0
 		for _, a := range evaluated {
-			if matchesRiskProfile(a.EvaluationResult, rp) {
+			// Build question responses by order_index
+			qResponses := make(map[int]string)
+			for _, r := range a.Responses {
+				if idx, ok := qOrderMap[r.QuestionID]; ok {
+					qResponses[idx] = r.GetStringValue()
+				}
+			}
+			if matchesRiskProfile(a.EvaluationResult, rp, qResponses) {
 				affected++
 			}
 		}
@@ -1494,60 +1507,16 @@ func (s *ReportService) GetRiskAnalysis(ctx context.Context, cqID primitive.Obje
 	return &RiskAnalysisResult{RiskProfiles: results}, nil
 }
 
-// matchesRiskProfile checks if an evaluation result matches a risk profile's conditions
-func matchesRiskProfile(result *models.EvaluationResult, rp models.RiskProfile) bool {
-	// Build lookup: dimension_code → DimensionScore
-	scoreMap := make(map[string]models.DimensionScore)
+// matchesRiskProfile checks if an evaluation result matches a risk profile's conditions.
+// Uses checkRiskConditions from public_link_service for consistent evaluation logic.
+func matchesRiskProfile(result *models.EvaluationResult, rp models.RiskProfile, questionResponses map[int]string) bool {
+	dimScores := make(map[string]float64)
+	dimLevels := make(map[string]string)
 	for _, ds := range result.DimensionScores {
-		scoreMap[ds.DimensionCode] = ds
+		dimScores[ds.DimensionCode] = ds.RawScore
+		dimLevels[ds.DimensionCode] = ds.Level
 	}
-
-	matchCount := 0
-	for _, cond := range rp.Conditions {
-		ds, ok := scoreMap[cond.DimensionCode]
-		if !ok {
-			if rp.Logic == "all" {
-				return false
-			}
-			continue
-		}
-
-		condMet := false
-		switch cond.Operator {
-		case "level_in":
-			for _, val := range cond.Values {
-				if ds.Level == val {
-					condMet = true
-					break
-				}
-			}
-		case "score_gt":
-			if len(cond.Values) > 0 {
-				if threshold, err := strconv.ParseFloat(cond.Values[0], 64); err == nil {
-					condMet = ds.RawScore > threshold
-				}
-			}
-		case "score_lt":
-			if len(cond.Values) > 0 {
-				if threshold, err := strconv.ParseFloat(cond.Values[0], 64); err == nil {
-					condMet = ds.RawScore < threshold
-				}
-			}
-		}
-
-		if condMet {
-			matchCount++
-		}
-		if !condMet && rp.Logic == "all" {
-			return false
-		}
-	}
-
-	if rp.Logic == "all" {
-		return matchCount == len(rp.Conditions)
-	}
-	// "any" logic
-	return matchCount > 0
+	return checkRiskConditions(rp.Conditions, rp.Logic, dimScores, dimLevels, questionResponses)
 }
 
 // ScoreDistribution holds histogram data for scores across dimensions

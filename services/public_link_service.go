@@ -524,10 +524,18 @@ func (s *PublicLinkService) evaluateRiskProfile(ctx context.Context, assignment 
 		}
 	}
 
+	// Build question responses by order_index for question-level conditions
+	questionResponses := make(map[int]string) // order_index → response string value
+	for _, r := range assignment.Responses {
+		if q, ok := questionMap[r.QuestionID]; ok {
+			questionResponses[q.OrderIndex] = r.GetStringValue()
+		}
+	}
+
 	// Evaluate risk profiles — find the first that matches
 	var matchedProfileName string
 	for _, profile := range evalConfig.RiskProfiles {
-		if checkRiskConditions(profile, dimScores, dimLevels) {
+		if checkRiskConditions(profile.Conditions, profile.Logic, dimScores, dimLevels, questionResponses) {
 			matchedProfileName = profile.Name
 			break
 		}
@@ -547,46 +555,84 @@ func (s *PublicLinkService) evaluateRiskProfile(ctx context.Context, assignment 
 	return nil
 }
 
-// checkRiskConditions checks if a risk profile's conditions are met given dimension scores/levels.
-func checkRiskConditions(profile models.RiskProfile, dimScores map[string]float64, dimLevels map[string]string) bool {
-	if len(profile.Conditions) == 0 {
+// checkRiskConditions evaluates a list of conditions with the given logic ("all"/"any").
+// Supports dimension-level conditions (score_gt, score_lt, level_in),
+// question-level conditions (eq, in) via QuestionOrderIndex,
+// and nested sub-condition groups via SubConditions + Logic.
+func checkRiskConditions(conditions []models.RiskCondition, logic string, dimScores map[string]float64, dimLevels map[string]string, questionResponses map[int]string) bool {
+	if len(conditions) == 0 {
 		return false
 	}
 
-	for _, cond := range profile.Conditions {
-		met := false
-		switch cond.Operator {
-		case "level_in":
-			level := dimLevels[cond.DimensionCode]
-			for _, v := range cond.Values {
-				if v == level {
-					met = true
-					break
-				}
-			}
-		case "score_gt":
-			if len(cond.Values) > 0 {
-				threshold := 0.0
-				fmt.Sscanf(cond.Values[0], "%f", &threshold)
-				met = dimScores[cond.DimensionCode] > threshold
-			}
-		case "score_lt":
-			if len(cond.Values) > 0 {
-				threshold := 0.0
-				fmt.Sscanf(cond.Values[0], "%f", &threshold)
-				met = dimScores[cond.DimensionCode] < threshold
-			}
-		}
+	for _, cond := range conditions {
+		met := evaluateCondition(cond, dimScores, dimLevels, questionResponses)
 
-		if profile.Logic == "any" && met {
+		if logic == "any" && met {
 			return true
 		}
-		if profile.Logic == "all" && !met {
+		if logic == "all" && !met {
 			return false
 		}
 	}
 
-	return profile.Logic == "all"
+	return logic == "all"
+}
+
+// evaluateCondition evaluates a single RiskCondition which can be:
+// - a sub-condition group (has SubConditions)
+// - a question-level check (has QuestionOrderIndex)
+// - a dimension-level check (has DimensionCode)
+func evaluateCondition(cond models.RiskCondition, dimScores map[string]float64, dimLevels map[string]string, questionResponses map[int]string) bool {
+	// Sub-condition group: recurse
+	if len(cond.SubConditions) > 0 {
+		groupLogic := cond.Logic
+		if groupLogic == "" {
+			groupLogic = "all"
+		}
+		return checkRiskConditions(cond.SubConditions, groupLogic, dimScores, dimLevels, questionResponses)
+	}
+
+	// Question-level condition
+	if cond.QuestionOrderIndex != nil {
+		resp := questionResponses[*cond.QuestionOrderIndex]
+		switch cond.Operator {
+		case "eq":
+			if len(cond.Values) > 0 {
+				return resp == cond.Values[0]
+			}
+		case "in":
+			for _, v := range cond.Values {
+				if resp == v {
+					return true
+				}
+			}
+		}
+		return false
+	}
+
+	// Dimension-level condition
+	switch cond.Operator {
+	case "level_in":
+		level := dimLevels[cond.DimensionCode]
+		for _, v := range cond.Values {
+			if v == level {
+				return true
+			}
+		}
+	case "score_gt":
+		if len(cond.Values) > 0 {
+			threshold := 0.0
+			fmt.Sscanf(cond.Values[0], "%f", &threshold)
+			return dimScores[cond.DimensionCode] > threshold
+		}
+	case "score_lt":
+		if len(cond.Values) > 0 {
+			threshold := 0.0
+			fmt.Sscanf(cond.Values[0], "%f", &threshold)
+			return dimScores[cond.DimensionCode] < threshold
+		}
+	}
+	return false
 }
 
 // findMatchingRange returns the first ScoreRange where score >= min && score < max.
