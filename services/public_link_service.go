@@ -462,7 +462,7 @@ func (s *PublicLinkService) evaluateRiskProfile(ctx context.Context, assignment 
 		qDef := questionMap[r.QuestionID]
 		switch v := val.(type) {
 		case float64:
-			if qDef.QuestionType == models.QuestionTypeMultipleChoice {
+			if qDef.QuestionType == models.QuestionTypeMultipleChoice || qDef.QuestionType == models.QuestionTypeBMICalculator {
 				if score, ok := lookupChoiceScore(qDef.Options, v, ""); ok {
 					responseValues[r.QuestionID] = score
 					continue
