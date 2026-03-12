@@ -79,6 +79,18 @@ func (r *PublicLinkRepository) Delete(ctx context.Context, id primitive.ObjectID
 	return nil
 }
 
+// DeleteByCompanyQuestionnaireIDs removes all public links for the given CQ IDs.
+func (r *PublicLinkRepository) DeleteByCompanyQuestionnaireIDs(ctx context.Context, cqIDs []primitive.ObjectID) (int64, error) {
+	if len(cqIDs) == 0 {
+		return 0, nil
+	}
+	result, err := r.collection.DeleteMany(ctx, bson.M{"company_questionnaire_id": bson.M{"$in": cqIDs}})
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete public links by CQ IDs: %w", err)
+	}
+	return result.DeletedCount, nil
+}
+
 func (r *PublicLinkRepository) IncrementResponseCount(ctx context.Context, id primitive.ObjectID) error {
 	_, err := r.collection.UpdateOne(ctx, bson.M{"_id": id}, bson.M{"$inc": bson.M{"response_count": 1}})
 	if err != nil {

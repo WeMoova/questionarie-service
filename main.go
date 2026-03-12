@@ -81,7 +81,9 @@ func main() {
 	}
 
 	// Initialize services
-	questionnaireService := services.NewQuestionnaireService(questionnaireRepo, companyQuestionnaireRepo, assignmentRepo)
+	publicLinkRepo := repository.NewPublicLinkRepository(mongodb.Database)
+	publicLinkRepo.EnsureIndexes(context.Background())
+	questionnaireService := services.NewQuestionnaireService(questionnaireRepo, companyQuestionnaireRepo, assignmentRepo, publicLinkRepo)
 	cloudflareService := services.NewCloudflareService()
 	companyService := services.NewCompanyService(companyRepo, companyQuestionnaireRepo, questionnaireRepo, assignmentRepo, userMetadataRepo, gamificationRepo, cloudflareService)
 	userMetadataService := services.NewUserMetadataService(userMetadataRepo, companyRepo)
@@ -91,8 +93,6 @@ func main() {
 	reportService := services.NewReportService(assignmentRepo, companyQuestionnaireRepo, userMetadataRepo, questionnaireRepo, companyRepo)
 	categoryService := services.NewCategoryService(categoryRepo, questionnaireRepo)
 	apiTokenService := services.NewAPITokenService(apiTokenRepo, companyRepo)
-	publicLinkRepo := repository.NewPublicLinkRepository(mongodb.Database)
-	publicLinkRepo.EnsureIndexes(context.Background())
 	publicLinkService := services.NewPublicLinkService(publicLinkRepo, assignmentRepo, companyQuestionnaireRepo, questionnaireRepo, companyRepo)
 
 	// Initialize handlers

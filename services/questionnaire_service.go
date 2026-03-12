@@ -11,17 +11,19 @@ import (
 
 // QuestionnaireService handles business logic for questionnaires
 type QuestionnaireService struct {
-	repo   *repository.QuestionnaireRepository
-	cqRepo *repository.CompanyQuestionnaireRepository
-	aRepo  *repository.AssignmentRepository
+	repo     *repository.QuestionnaireRepository
+	cqRepo   *repository.CompanyQuestionnaireRepository
+	aRepo    *repository.AssignmentRepository
+	linkRepo *repository.PublicLinkRepository
 }
 
 // NewQuestionnaireService creates a new QuestionnaireService
-func NewQuestionnaireService(repo *repository.QuestionnaireRepository, cqRepo *repository.CompanyQuestionnaireRepository, aRepo *repository.AssignmentRepository) *QuestionnaireService {
+func NewQuestionnaireService(repo *repository.QuestionnaireRepository, cqRepo *repository.CompanyQuestionnaireRepository, aRepo *repository.AssignmentRepository, linkRepo *repository.PublicLinkRepository) *QuestionnaireService {
 	return &QuestionnaireService{
-		repo:   repo,
-		cqRepo: cqRepo,
-		aRepo:  aRepo,
+		repo:     repo,
+		cqRepo:   cqRepo,
+		aRepo:    aRepo,
+		linkRepo: linkRepo,
 	}
 }
 
@@ -154,19 +156,26 @@ func (s *QuestionnaireService) DeleteQuestionnaire(ctx context.Context, id primi
 		return fmt.Errorf("failed to find related company questionnaires: %w", err)
 	}
 
-	// 2. Delete user assignments linked to those company questionnaires
+	// 2. Delete public links for those company questionnaires
+	if len(cqIDs) > 0 {
+		if _, err := s.linkRepo.DeleteByCompanyQuestionnaireIDs(ctx, cqIDs); err != nil {
+			return fmt.Errorf("failed to delete related public links: %w", err)
+		}
+	}
+
+	// 3. Delete user assignments linked to those company questionnaires
 	if len(cqIDs) > 0 {
 		if _, err := s.aRepo.DeleteByCompanyQuestionnaireIDs(ctx, cqIDs); err != nil {
 			return fmt.Errorf("failed to delete related user assignments: %w", err)
 		}
 	}
 
-	// 3. Delete the company questionnaire assignments themselves
+	// 4. Delete the company questionnaire assignments themselves
 	if _, err := s.cqRepo.DeleteByQuestionnaireID(ctx, id); err != nil {
 		return fmt.Errorf("failed to delete related company questionnaires: %w", err)
 	}
 
-	// 4. Delete the questionnaire
+	// 5. Delete the questionnaire
 	return s.repo.Delete(ctx, id)
 }
 
