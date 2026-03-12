@@ -11,13 +11,17 @@ import (
 
 // QuestionnaireService handles business logic for questionnaires
 type QuestionnaireService struct {
-	repo *repository.QuestionnaireRepository
+	repo   *repository.QuestionnaireRepository
+	cqRepo *repository.CompanyQuestionnaireRepository
+	aRepo  *repository.AssignmentRepository
 }
 
 // NewQuestionnaireService creates a new QuestionnaireService
-func NewQuestionnaireService(repo *repository.QuestionnaireRepository) *QuestionnaireService {
+func NewQuestionnaireService(repo *repository.QuestionnaireRepository, cqRepo *repository.CompanyQuestionnaireRepository, aRepo *repository.AssignmentRepository) *QuestionnaireService {
 	return &QuestionnaireService{
-		repo: repo,
+		repo:   repo,
+		cqRepo: cqRepo,
+		aRepo:  aRepo,
 	}
 }
 
@@ -141,8 +145,28 @@ func (s *QuestionnaireService) DeactivateQuestionnaire(ctx context.Context, id p
 	return s.repo.Deactivate(ctx, id)
 }
 
-// DeleteQuestionnaire permanently removes a questionnaire
+// DeleteQuestionnaire permanently removes a questionnaire and all related
+// company_questionnaire assignments and user assignments (cascade delete).
 func (s *QuestionnaireService) DeleteQuestionnaire(ctx context.Context, id primitive.ObjectID) error {
+	// 1. Find all company_questionnaire IDs that reference this questionnaire
+	cqIDs, err := s.cqRepo.GetIDsByQuestionnaireID(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to find related company questionnaires: %w", err)
+	}
+
+	// 2. Delete user assignments linked to those company questionnaires
+	if len(cqIDs) > 0 {
+		if _, err := s.aRepo.DeleteByCompanyQuestionnaireIDs(ctx, cqIDs); err != nil {
+			return fmt.Errorf("failed to delete related user assignments: %w", err)
+		}
+	}
+
+	// 3. Delete the company questionnaire assignments themselves
+	if _, err := s.cqRepo.DeleteByQuestionnaireID(ctx, id); err != nil {
+		return fmt.Errorf("failed to delete related company questionnaires: %w", err)
+	}
+
+	// 4. Delete the questionnaire
 	return s.repo.Delete(ctx, id)
 }
 

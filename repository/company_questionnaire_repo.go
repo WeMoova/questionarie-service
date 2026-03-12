@@ -268,6 +268,37 @@ func (r *CompanyQuestionnaireRepository) Delete(ctx context.Context, id primitiv
 	return nil
 }
 
+// DeleteByQuestionnaireID deletes all company questionnaires for a given questionnaire
+func (r *CompanyQuestionnaireRepository) DeleteByQuestionnaireID(ctx context.Context, questionnaireID primitive.ObjectID) (int64, error) {
+	result, err := r.collection.DeleteMany(ctx, bson.M{"questionnaire_id": questionnaireID})
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete company questionnaires by questionnaire: %w", err)
+	}
+	return result.DeletedCount, nil
+}
+
+// GetIDsByQuestionnaireID returns the IDs of all company questionnaires for a given questionnaire
+func (r *CompanyQuestionnaireRepository) GetIDsByQuestionnaireID(ctx context.Context, questionnaireID primitive.ObjectID) ([]primitive.ObjectID, error) {
+	cursor, err := r.collection.Find(ctx, bson.M{"questionnaire_id": questionnaireID}, options.Find().SetProjection(bson.M{"_id": 1}))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get company questionnaire IDs: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	var results []struct {
+		ID primitive.ObjectID `bson:"_id"`
+	}
+	if err = cursor.All(ctx, &results); err != nil {
+		return nil, fmt.Errorf("failed to decode IDs: %w", err)
+	}
+
+	ids := make([]primitive.ObjectID, len(results))
+	for i, r := range results {
+		ids[i] = r.ID
+	}
+	return ids, nil
+}
+
 // DeleteByCompanyID deletes all company questionnaires for a company
 func (r *CompanyQuestionnaireRepository) DeleteByCompanyID(ctx context.Context, companyID primitive.ObjectID) (int64, error) {
 	result, err := r.collection.DeleteMany(ctx, bson.M{"company_id": companyID})

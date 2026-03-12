@@ -54,12 +54,13 @@ type RiskCondition struct {
 
 // RiskProfile defines a configurable risk pattern across multiple dimensions
 type RiskProfile struct {
-	Name             string          `bson:"name" json:"name"`
-	Description      string          `bson:"description" json:"description"`
-	Severity         string          `bson:"severity" json:"severity"` // "critical", "warning", "info"
-	Color            string          `bson:"color" json:"color"`
-	Logic            string          `bson:"logic" json:"logic"` // "all" (AND) or "any" (OR)
-	Conditions       []RiskCondition `bson:"conditions" json:"conditions"`
+	Name        string          `bson:"name" json:"name"`
+	Label       string          `bson:"label,omitempty" json:"label,omitempty"`
+	Description string          `bson:"description" json:"description"`
+	Severity    string          `bson:"severity" json:"severity"` // "critical", "warning", "info"
+	Color       string          `bson:"color" json:"color"`
+	Logic       string          `bson:"logic" json:"logic"` // "all" (AND) or "any" (OR)
+	Conditions  []RiskCondition `bson:"conditions" json:"conditions"`
 }
 
 // EvaluationConfig holds the scoring methodology for a questionnaire
