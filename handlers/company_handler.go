@@ -843,6 +843,5 @@ func (h *CompanyHandler) GetCompanyAuthConfig(w http.ResponseWriter, r *http.Req
 		"tenant_id":      company.FusionAuthTenantID,
 		"application_id": company.FusionAuthApplicationID,
 		"client_id":      company.FusionAuthClientID,
-		"client_secret":  company.FusionAuthClientSecret,
 	}, "")
 }

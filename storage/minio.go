@@ -1,9 +1,11 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -56,7 +58,7 @@ func NewMinIOStorage() (*MinIOStorage, error) {
 
 // AllowedImageTypes for validation
 var AllowedImageTypes = map[string]bool{
-	".jpg": true, ".jpeg": true, ".png": true, ".webp": true, ".gif": true, ".svg": true,
+	".jpg": true, ".jpeg": true, ".png": true, ".webp": true, ".gif": true,
 }
 
 // MaxImageSize is 5MB
@@ -72,16 +74,30 @@ func (s *MinIOStorage) UploadImage(ctx context.Context, reader io.Reader, size i
 		return "", fmt.Errorf("image too large: max %d MB", MaxImageSize/(1024*1024))
 	}
 
+	// Read the first 512 bytes to validate the actual file content via magic bytes.
+	header := make([]byte, 512)
+	n, err := io.ReadAtLeast(reader, header, 1)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file header: %w", err)
+	}
+	header = header[:n]
+
+	detectedType := http.DetectContentType(header)
+	if !strings.HasPrefix(detectedType, "image/") {
+		return "", fmt.Errorf("file content is not a valid image (detected: %s)", detectedType)
+	}
+
+	// Reconstruct the reader by prepending the header bytes we already read.
+	combinedReader := io.MultiReader(bytes.NewReader(header), reader)
+
 	objectName := fmt.Sprintf("%s/%s-%s%s", folder, time.Now().Format("20060102"), uuid.New().String()[:8], ext)
 
 	contentType := "image/" + strings.TrimPrefix(ext, ".")
 	if ext == ".jpg" {
 		contentType = "image/jpeg"
-	} else if ext == ".svg" {
-		contentType = "image/svg+xml"
 	}
 
-	_, err := s.client.PutObject(ctx, s.bucketName, objectName, reader, size, minio.PutObjectOptions{
+	_, err = s.client.PutObject(ctx, s.bucketName, objectName, combinedReader, size, minio.PutObjectOptions{
 		ContentType: contentType,
 	})
 	if err != nil {

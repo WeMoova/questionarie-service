@@ -213,6 +213,16 @@ func (s *PublicLinkService) StartAnonymousSession(ctx context.Context, slug stri
 		return nil, fmt.Errorf("this link is no longer active")
 	}
 
+	// Validate demographic data limits.
+	if len(demographicData) > 50 {
+		return nil, fmt.Errorf("too many demographic fields: maximum 50 allowed")
+	}
+	for key, val := range demographicData {
+		if len(val) > 500 {
+			return nil, fmt.Errorf("demographic field '%s' exceeds maximum length of 500 characters", key)
+		}
+	}
+
 	// Validate required demographic fields.
 	for _, field := range link.DemographicFields {
 		if field.Required {

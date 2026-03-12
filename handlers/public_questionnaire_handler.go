@@ -91,6 +91,9 @@ func (h *PublicQuestionnaireHandler) SaveResponses(w http.ResponseWriter, r *htt
 		return
 	}
 
+	// Limit request body to 1MB to prevent abuse
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
 	var req struct {
 		Responses []models.Response `json:"responses"`
 	}
@@ -101,6 +104,11 @@ func (h *PublicQuestionnaireHandler) SaveResponses(w http.ResponseWriter, r *htt
 
 	if len(req.Responses) == 0 {
 		utils.BadRequest(w, "responses cannot be empty")
+		return
+	}
+
+	if len(req.Responses) > 500 {
+		utils.BadRequest(w, "too many responses: maximum 500 per request")
 		return
 	}
 

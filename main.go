@@ -196,16 +196,21 @@ func main() {
 		r.Get("/api/v1/public/company-auth-config/{slug}", companyHandler.GetCompanyAuthConfig)
 		r.Get("/api/v1/public/company-branding-by-domain/{domain}", companyHandler.GetBrandingByDomain)
 
-		// Public questionnaire endpoints (no auth — anonymous access)
-		r.Get("/api/v1/public/q/{slug}", publicQHandler.GetLinkInfo)
-		r.Get("/api/v1/public/q/{slug}/questions", publicQHandler.GetQuestions)
-		r.Post("/api/v1/public/q/{slug}/start", publicQHandler.StartSession)
-
-		// Session token auth group (anonymous responses)
+		// Public questionnaire endpoints (no auth — anonymous access, rate limited)
 		r.Group(func(r chi.Router) {
-			r.Use(authMiddleware.SessionTokenAuth)
-			r.Post("/api/v1/public/q/{slug}/responses", publicQHandler.SaveResponses)
-			r.Post("/api/v1/public/q/{slug}/submit", publicQHandler.SubmitSession)
+			publicQLimiter := authMiddleware.NewRateLimiter(30, time.Minute)
+			r.Use(publicQLimiter.Handler)
+
+			r.Get("/api/v1/public/q/{slug}", publicQHandler.GetLinkInfo)
+			r.Get("/api/v1/public/q/{slug}/questions", publicQHandler.GetQuestions)
+			r.Post("/api/v1/public/q/{slug}/start", publicQHandler.StartSession)
+
+			// Session token auth sub-group (anonymous responses)
+			r.Group(func(r chi.Router) {
+				r.Use(authMiddleware.SessionTokenAuth)
+				r.Post("/api/v1/public/q/{slug}/responses", publicQHandler.SaveResponses)
+				r.Post("/api/v1/public/q/{slug}/submit", publicQHandler.SubmitSession)
+			})
 		})
 
 		// Public admin settings (no auth — admin app pre-login branding)

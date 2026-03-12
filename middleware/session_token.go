@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -26,7 +27,7 @@ var SessionContextKey = sessionContextKey{}
 func getSessionSecret() []byte {
 	secret := os.Getenv("SESSION_TOKEN_SECRET")
 	if secret == "" {
-		secret = "wemoova-session-default-secret-change-in-prod"
+		log.Fatal("FATAL: SESSION_TOKEN_SECRET environment variable is not set. The service cannot start without it.")
 	}
 	return []byte(secret)
 }
@@ -54,7 +55,7 @@ func SessionTokenAuth(next http.Handler) http.Handler {
 		}
 		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
 
-		token, err := jwt.ParseWithClaims(tokenStr, &SessionClaims{}, func(t *jwt.Token) (interface{}, error) {
+		token, err := jwt.ParseWithClaims(tokenStr, &SessionClaims{}, func(t *jwt.Token) (any, error) {
 			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 			}
