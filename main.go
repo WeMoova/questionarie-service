@@ -381,6 +381,7 @@ func main() {
 				r.Use(authMiddleware.RequireCompanyAdmin())
 
 				r.Get("/api/v1/companies/{company_id}/questionnaires", companyHandler.GetCompanyQuestionnaires)
+				r.Get("/api/v1/company-questionnaires", companyHandler.ListAllCompanyQuestionnaires)
 				r.Get("/api/v1/company-questionnaires/{id}", companyHandler.GetCompanyQuestionnaire)
 				r.Put("/api/v1/company-questionnaires/{id}", companyHandler.UpdateCompanyQuestionnaire)
 				r.Delete("/api/v1/company-questionnaires/{id}", companyHandler.DeleteCompanyQuestionnaire)

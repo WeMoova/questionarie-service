@@ -324,6 +324,37 @@ func (h *CompanyHandler) DeleteCompany(w http.ResponseWriter, r *http.Request) {
 	utils.RespondWithSuccess(w, http.StatusOK, nil, "Company deleted successfully")
 }
 
+// ListAllCompanyQuestionnaires handles GET /api/v1/company-questionnaires
+// For super_admin: returns all CQs. For company_admin: returns only their company's CQs.
+func (h *CompanyHandler) ListAllCompanyQuestionnaires(w http.ResponseWriter, r *http.Request) {
+	claims, err := middleware.GetUserFromContext(r.Context())
+	if err != nil {
+		utils.Unauthorized(w, "unauthorized")
+		return
+	}
+
+	isSuperAdmin := middleware.IsSuperAdmin(r.Context())
+
+	var companyIDFilter *primitive.ObjectID
+	if !isSuperAdmin {
+		// Non-super-admins: filter by their company
+		userMeta, err := h.service.GetMyCompany(r.Context(), claims.Sub)
+		if err != nil {
+			utils.Unauthorized(w, "company not configured for this user")
+			return
+		}
+		companyIDFilter = &userMeta.ID
+	}
+
+	cqs, err := h.service.ListAllCompanyQuestionnaires(r.Context(), companyIDFilter)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, cqs, "")
+}
+
 // GetCompanyQuestionnaire handles GET /api/v1/company-questionnaires/:id
 func (h *CompanyHandler) GetCompanyQuestionnaire(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")

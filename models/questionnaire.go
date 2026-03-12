@@ -211,6 +211,7 @@ type CompanyQuestionnaire struct {
 	// Transient fields — not persisted, populated by service layer
 	QuestionnaireTitle       string `bson:"-" json:"questionnaire_title,omitempty"`
 	QuestionnaireDescription string `bson:"-" json:"questionnaire_description,omitempty"`
+	CompanyName              string `bson:"-" json:"company_name,omitempty"`
 }
 
 // NewCompanyQuestionnaire creates a new company questionnaire assignment

@@ -419,6 +419,46 @@ func (s *CompanyService) GetCompanyQuestionnaires(ctx context.Context, companyID
 	return cqs, nil
 }
 
+// ListAllCompanyQuestionnaires retrieves all company questionnaires across all companies
+// (or filtered by companyID for non-super-admins), enriched with questionnaire title/description and company name.
+func (s *CompanyService) ListAllCompanyQuestionnaires(ctx context.Context, companyID *primitive.ObjectID) ([]*models.CompanyQuestionnaire, error) {
+	cqs, err := s.companyQuestionnaireRepo.ListAll(ctx, companyID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build a cache of company names and questionnaire info to avoid repeated lookups
+	companyNameCache := make(map[primitive.ObjectID]string)
+	questionnaireCache := make(map[primitive.ObjectID]*models.Questionnaire)
+
+	for _, cq := range cqs {
+		// Populate questionnaire title and description
+		if _, ok := questionnaireCache[cq.QuestionnaireID]; !ok {
+			q, err := s.questionnaireRepo.GetByID(ctx, cq.QuestionnaireID)
+			if err == nil {
+				questionnaireCache[cq.QuestionnaireID] = q
+			}
+		}
+		if q, ok := questionnaireCache[cq.QuestionnaireID]; ok {
+			cq.QuestionnaireTitle = q.Title
+			cq.QuestionnaireDescription = q.Description
+		}
+
+		// Populate company name
+		if _, ok := companyNameCache[cq.CompanyID]; !ok {
+			company, err := s.companyRepo.GetByID(ctx, cq.CompanyID)
+			if err == nil {
+				companyNameCache[cq.CompanyID] = company.Name
+			}
+		}
+		if name, ok := companyNameCache[cq.CompanyID]; ok {
+			cq.CompanyName = name
+		}
+	}
+
+	return cqs, nil
+}
+
 // GetActiveCompanyQuestionnaires retrieves active questionnaires for a company in current period
 func (s *CompanyService) GetActiveCompanyQuestionnaires(ctx context.Context, companyID primitive.ObjectID) ([]*models.CompanyQuestionnaire, error) {
 	return s.companyQuestionnaireRepo.GetActiveByCompanyAndPeriod(ctx, companyID)

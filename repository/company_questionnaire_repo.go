@@ -69,6 +69,30 @@ func (r *CompanyQuestionnaireRepository) GetByCompanyID(ctx context.Context, com
 	return cqs, nil
 }
 
+// ListAll retrieves all company questionnaires, optionally filtered by company_id.
+// Results are sorted by assigned_at descending.
+func (r *CompanyQuestionnaireRepository) ListAll(ctx context.Context, companyID *primitive.ObjectID) ([]*models.CompanyQuestionnaire, error) {
+	filter := bson.M{}
+	if companyID != nil {
+		filter["company_id"] = *companyID
+	}
+
+	opts := options.Find().SetSort(bson.D{{Key: "assigned_at", Value: -1}})
+
+	cursor, err := r.collection.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list all company questionnaires: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	var cqs []*models.CompanyQuestionnaire
+	if err = cursor.All(ctx, &cqs); err != nil {
+		return nil, fmt.Errorf("failed to decode company questionnaires: %w", err)
+	}
+
+	return cqs, nil
+}
+
 // GetByQuestionnaireID retrieves all companies assigned to a questionnaire
 func (r *CompanyQuestionnaireRepository) GetByQuestionnaireID(ctx context.Context, questionnaireID primitive.ObjectID) ([]*models.CompanyQuestionnaire, error) {
 	cursor, err := r.collection.Find(ctx, bson.M{"questionnaire_id": questionnaireID})
