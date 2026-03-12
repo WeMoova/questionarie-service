@@ -198,7 +198,7 @@ func main() {
 
 		// Public questionnaire endpoints (no auth — anonymous access, rate limited)
 		r.Group(func(r chi.Router) {
-			publicQLimiter := authMiddleware.NewRateLimiter(5000, time.Minute) // temporarily raised for load testing (restore to 30)
+			publicQLimiter := authMiddleware.NewRateLimiter(30, time.Minute)
 			r.Use(publicQLimiter.Handler)
 
 			r.Get("/api/v1/public/q/{slug}", publicQHandler.GetLinkInfo)
