@@ -262,6 +262,9 @@ func (h *QuestionnaireHandler) AddQuestion(w http.ResponseWriter, r *http.Reques
 		IsRequired    bool                   `json:"is_required"`
 		SectionID     string                 `json:"section_id"`
 		DimensionCode string                 `json:"dimension_code"`
+		HasDetail     bool                   `json:"has_detail"`
+		DetailPrompt  string                 `json:"detail_prompt"`
+		SkipLogic     []models.SkipRule      `json:"skip_logic"`
 	}
 
 	if err := utils.ParseRequestBody(r, &req); err != nil {
@@ -283,6 +286,9 @@ func (h *QuestionnaireHandler) AddQuestion(w http.ResponseWriter, r *http.Reques
 	question.ImageURL = req.ImageURL
 	question.SectionID = req.SectionID
 	question.DimensionCode = req.DimensionCode
+	question.HasDetail = req.HasDetail
+	question.DetailPrompt = req.DetailPrompt
+	question.SkipLogic = req.SkipLogic
 
 	if req.Options != nil {
 		question.Options = req.Options
@@ -320,6 +326,9 @@ func (h *QuestionnaireHandler) UpdateQuestion(w http.ResponseWriter, r *http.Req
 		IsRequired    bool                   `json:"is_required"`
 		SectionID     string                 `json:"section_id"`
 		DimensionCode string                 `json:"dimension_code"`
+		HasDetail     bool                   `json:"has_detail"`
+		DetailPrompt  string                 `json:"detail_prompt"`
+		SkipLogic     []models.SkipRule      `json:"skip_logic"`
 	}
 
 	if err := utils.ParseRequestBody(r, &req); err != nil {
@@ -337,6 +346,9 @@ func (h *QuestionnaireHandler) UpdateQuestion(w http.ResponseWriter, r *http.Req
 		IsRequired:    req.IsRequired,
 		SectionID:     req.SectionID,
 		DimensionCode: req.DimensionCode,
+		HasDetail:     req.HasDetail,
+		DetailPrompt:  req.DetailPrompt,
+		SkipLogic:     req.SkipLogic,
 	}
 
 	if err := h.service.UpdateQuestion(r.Context(), id, questionID, question); err != nil {
