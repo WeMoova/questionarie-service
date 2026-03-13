@@ -86,13 +86,41 @@ func (s *EvaluationService) EvaluateAssignment(ctx context.Context, assignmentID
 					continue
 				}
 			}
+			// For number types with scoring_ranges, map value to score
+			if q.QuestionType == models.QuestionTypeNumber {
+				if score, ok := lookupNumberScore(q.Options, v); ok {
+					responseValues[r.QuestionID] = score
+					continue
+				}
+			}
 			responseValues[r.QuestionID] = v
 		case int:
-			responseValues[r.QuestionID] = float64(v)
+			fv := float64(v)
+			if q.QuestionType == models.QuestionTypeNumber {
+				if score, ok := lookupNumberScore(q.Options, fv); ok {
+					responseValues[r.QuestionID] = score
+					continue
+				}
+			}
+			responseValues[r.QuestionID] = fv
 		case int32:
-			responseValues[r.QuestionID] = float64(v)
+			fv := float64(v)
+			if q.QuestionType == models.QuestionTypeNumber {
+				if score, ok := lookupNumberScore(q.Options, fv); ok {
+					responseValues[r.QuestionID] = score
+					continue
+				}
+			}
+			responseValues[r.QuestionID] = fv
 		case int64:
-			responseValues[r.QuestionID] = float64(v)
+			fv := float64(v)
+			if q.QuestionType == models.QuestionTypeNumber {
+				if score, ok := lookupNumberScore(q.Options, fv); ok {
+					responseValues[r.QuestionID] = score
+					continue
+				}
+			}
+			responseValues[r.QuestionID] = fv
 		case string:
 			// multiple_choice with string value — look up score from choices
 			if score, ok := lookupChoiceScore(q.Options, 0, v); ok {
@@ -220,6 +248,41 @@ func lookupChoiceScore(options map[string]interface{}, numVal float64, strVal st
 		// Match by numeric value
 		if v := toFloat64(choice["value"]); v == numVal {
 			return toFloat64(scoreRaw), true
+		}
+	}
+	return 0, false
+}
+
+// lookupNumberScore checks if a number-type question has scoring_ranges in its
+// options and returns the score for the range that matches the given value.
+// scoring_ranges is an array of {min, max, score} objects.  A range matches when
+// min <= value < max.  If max is absent the range is open-ended (min <= value).
+func lookupNumberScore(options map[string]interface{}, value float64) (float64, bool) {
+	rangesRaw, ok := options["scoring_ranges"]
+	if !ok {
+		return 0, false
+	}
+	ranges, ok := rangesRaw.([]interface{})
+	if !ok {
+		return 0, false
+	}
+	for _, r := range ranges {
+		rng, ok := r.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		minVal := toFloat64(rng["min"])
+		score := toFloat64(rng["score"])
+		if maxRaw, hasMax := rng["max"]; hasMax {
+			maxVal := toFloat64(maxRaw)
+			if value >= minVal && value < maxVal {
+				return score, true
+			}
+		} else {
+			// open-ended: min <= value
+			if value >= minVal {
+				return score, true
+			}
 		}
 	}
 	return 0, false

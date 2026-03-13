@@ -468,13 +468,40 @@ func (s *PublicLinkService) evaluateRiskProfile(ctx context.Context, assignment 
 					continue
 				}
 			}
+			if qDef.QuestionType == models.QuestionTypeNumber {
+				if score, ok := lookupNumberScore(qDef.Options, v); ok {
+					responseValues[r.QuestionID] = score
+					continue
+				}
+			}
 			responseValues[r.QuestionID] = v
 		case int:
-			responseValues[r.QuestionID] = float64(v)
+			fv := float64(v)
+			if qDef.QuestionType == models.QuestionTypeNumber {
+				if score, ok := lookupNumberScore(qDef.Options, fv); ok {
+					responseValues[r.QuestionID] = score
+					continue
+				}
+			}
+			responseValues[r.QuestionID] = fv
 		case int32:
-			responseValues[r.QuestionID] = float64(v)
+			fv := float64(v)
+			if qDef.QuestionType == models.QuestionTypeNumber {
+				if score, ok := lookupNumberScore(qDef.Options, fv); ok {
+					responseValues[r.QuestionID] = score
+					continue
+				}
+			}
+			responseValues[r.QuestionID] = fv
 		case int64:
-			responseValues[r.QuestionID] = float64(v)
+			fv := float64(v)
+			if qDef.QuestionType == models.QuestionTypeNumber {
+				if score, ok := lookupNumberScore(qDef.Options, fv); ok {
+					responseValues[r.QuestionID] = score
+					continue
+				}
+			}
+			responseValues[r.QuestionID] = fv
 		case string:
 			if score, ok := lookupChoiceScore(qDef.Options, 0, v); ok {
 				responseValues[r.QuestionID] = score
