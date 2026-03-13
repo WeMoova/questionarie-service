@@ -396,6 +396,7 @@ func main() {
 				r.Get("/api/v1/company-questionnaires/{id}/public-links", publicLinkHandler.ListLinks)
 				r.Put("/api/v1/public-links/{id}", publicLinkHandler.UpdateLink)
 				r.Delete("/api/v1/public-links/{id}", publicLinkHandler.DeleteLink)
+				r.Get("/api/v1/public-links/{id}/report", publicLinkHandler.GetReport)
 
 				// Color config
 				r.Get("/api/v1/company-questionnaires/{id}/color-config", companyHandler.GetColorConfig)

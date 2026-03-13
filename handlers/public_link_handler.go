@@ -119,3 +119,21 @@ func (h *PublicLinkHandler) DeleteLink(w http.ResponseWriter, r *http.Request) {
 
 	utils.RespondWithSuccess(w, http.StatusOK, nil, "Public link deleted successfully")
 }
+
+// GetReport handles GET /api/v1/public-links/{id}/report
+func (h *PublicLinkHandler) GetReport(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	linkID, err := utils.ValidateObjectID(idStr)
+	if err != nil {
+		utils.BadRequest(w, err.Error())
+		return
+	}
+
+	report, err := h.service.GetLinkReport(r.Context(), linkID)
+	if err != nil {
+		utils.HandleRepositoryError(w, err)
+		return
+	}
+
+	utils.RespondWithSuccess(w, http.StatusOK, report, "")
+}

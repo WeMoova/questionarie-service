@@ -117,6 +117,183 @@ func (s *PublicLinkService) DeleteLink(ctx context.Context, id primitive.ObjectI
 }
 
 // ---------------------------------------------------------------------------
+// Report
+// ---------------------------------------------------------------------------
+
+// GetLinkReport returns aggregated stats, question summary, and all responses
+// for a public link.
+func (s *PublicLinkService) GetLinkReport(ctx context.Context, linkID primitive.ObjectID) (map[string]interface{}, error) {
+	// 1. Get the public link
+	link, err := s.linkRepo.GetByID(ctx, linkID)
+	if err != nil {
+		return nil, fmt.Errorf("public link not found: %w", err)
+	}
+
+	// 2. Get the questionnaire (for question definitions)
+	cq, err := s.cqRepo.GetByID(ctx, link.CompanyQuestionnaireID)
+	if err != nil {
+		return nil, fmt.Errorf("company questionnaire not found: %w", err)
+	}
+
+	q, err := s.questionnaireRepo.GetByID(ctx, cq.QuestionnaireID)
+	if err != nil {
+		return nil, fmt.Errorf("questionnaire not found: %w", err)
+	}
+
+	// 3. Get all assignments for this link
+	assignments, err := s.assignmentRepo.GetByPublicLinkID(ctx, linkID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get assignments: %w", err)
+	}
+
+	// 4. Compute stats
+	totalResponses := len(assignments)
+	var completed, inProgress int
+	var completionDurations []float64
+	var firstResponseAt, lastResponseAt *time.Time
+
+	for _, a := range assignments {
+		switch a.Status {
+		case models.AssignmentStatusCompleted:
+			completed++
+		case models.AssignmentStatusInProgress:
+			inProgress++
+		}
+
+		// Track first/last response times (using started_at as response time)
+		if a.StartedAt != nil {
+			if firstResponseAt == nil || a.StartedAt.Before(*firstResponseAt) {
+				t := *a.StartedAt
+				firstResponseAt = &t
+			}
+			if lastResponseAt == nil || a.StartedAt.After(*lastResponseAt) {
+				t := *a.StartedAt
+				lastResponseAt = &t
+			}
+		}
+		if a.CompletedAt != nil {
+			if lastResponseAt == nil || a.CompletedAt.After(*lastResponseAt) {
+				t := *a.CompletedAt
+				lastResponseAt = &t
+			}
+		}
+
+		// Completion time calculation
+		if a.Status == models.AssignmentStatusCompleted && a.StartedAt != nil && a.CompletedAt != nil {
+			dur := a.CompletedAt.Sub(*a.StartedAt).Seconds()
+			completionDurations = append(completionDurations, dur)
+		}
+	}
+
+	var avgCompletionTimeSec float64
+	if len(completionDurations) > 0 {
+		var sum float64
+		for _, d := range completionDurations {
+			sum += d
+		}
+		avgCompletionTimeSec = math.Round(sum / float64(len(completionDurations)))
+	}
+
+	stats := map[string]interface{}{
+		"total_responses":            totalResponses,
+		"completed":                  completed,
+		"in_progress":                inProgress,
+		"avg_completion_time_seconds": avgCompletionTimeSec,
+	}
+	if firstResponseAt != nil {
+		stats["first_response_at"] = firstResponseAt
+	}
+	if lastResponseAt != nil {
+		stats["last_response_at"] = lastResponseAt
+	}
+
+	// 5. Build question summary with answer distribution
+	// Create a map of question_id → question for easy lookup
+	questionMap := make(map[string]models.Question, len(q.Questions))
+	for _, question := range q.Questions {
+		questionMap[question.QuestionID] = question
+	}
+
+	// Build answer distribution per question
+	type questionDist struct {
+		distribution map[string]int
+	}
+	distMap := make(map[string]*questionDist)
+	for _, question := range q.Questions {
+		distMap[question.QuestionID] = &questionDist{
+			distribution: make(map[string]int),
+		}
+	}
+
+	for _, a := range assignments {
+		for _, resp := range a.Responses {
+			qd, ok := distMap[resp.QuestionID]
+			if !ok {
+				continue
+			}
+			val := resp.GetValue()
+			if val == nil {
+				continue
+			}
+			// Handle multiselect ([]interface{}) — count each selected value
+			if arr, ok := val.([]interface{}); ok {
+				for _, item := range arr {
+					qd.distribution[fmt.Sprintf("%v", item)]++
+				}
+			} else {
+				qd.distribution[resp.GetStringValue()]++
+			}
+		}
+	}
+
+	var questionSummary []map[string]interface{}
+	for _, question := range q.Questions {
+		qd := distMap[question.QuestionID]
+		entry := map[string]interface{}{
+			"question_id":        question.QuestionID,
+			"question_text":      question.QuestionText,
+			"question_type":      string(question.QuestionType),
+			"order_index":        question.OrderIndex,
+			"answer_distribution": qd.distribution,
+		}
+		questionSummary = append(questionSummary, entry)
+	}
+
+	// 6. Build individual responses
+	var responses []map[string]interface{}
+	for _, a := range assignments {
+		answers := make(map[string]string, len(a.Responses))
+		for _, resp := range a.Responses {
+			answers[resp.QuestionID] = resp.GetStringValue()
+		}
+
+		entry := map[string]interface{}{
+			"id":               a.ID,
+			"demographic_data": a.DemographicData,
+			"status":           a.Status,
+			"answers":          answers,
+		}
+		if a.StartedAt != nil {
+			entry["started_at"] = a.StartedAt
+		}
+		if a.CompletedAt != nil {
+			entry["completed_at"] = a.CompletedAt
+		}
+		if a.EvaluationResult != nil {
+			entry["evaluation_result"] = a.EvaluationResult
+		}
+		responses = append(responses, entry)
+	}
+
+	return map[string]interface{}{
+		"link":             link,
+		"stats":            stats,
+		"question_summary": questionSummary,
+		"responses":        responses,
+	}, nil
+}
+
+// ---------------------------------------------------------------------------
 // Anonymous flow
 // ---------------------------------------------------------------------------
 

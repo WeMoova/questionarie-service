@@ -424,6 +424,23 @@ func (r *AssignmentRepository) CheckDuplicate(ctx context.Context, userID string
 	return count > 0, nil
 }
 
+// GetByPublicLinkID retrieves all assignments for a specific public link
+func (r *AssignmentRepository) GetByPublicLinkID(ctx context.Context, publicLinkID primitive.ObjectID) ([]*models.UserQuestionnaireAssignment, error) {
+	opts := options.Find().SetSort(bson.D{{Key: "assigned_at", Value: -1}})
+	cursor, err := r.collection.Find(ctx, bson.M{"public_link_id": publicLinkID}, opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get assignments by public link: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	var assignments []*models.UserQuestionnaireAssignment
+	if err = cursor.All(ctx, &assignments); err != nil {
+		return nil, fmt.Errorf("failed to decode assignments: %w", err)
+	}
+
+	return assignments, nil
+}
+
 // GetByUserAndCQ retrieves a non-cancelled assignment for a user and company questionnaire
 func (r *AssignmentRepository) GetByUserAndCQ(ctx context.Context, userID string, cqID primitive.ObjectID) (*models.UserQuestionnaireAssignment, error) {
 	var assignment models.UserQuestionnaireAssignment
