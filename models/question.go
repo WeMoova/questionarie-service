@@ -14,7 +14,8 @@ const (
 	QuestionTypeYesNo          QuestionType = "yes_no"
 	QuestionTypeNumber         QuestionType = "number"
 	QuestionTypeMultiSelect    QuestionType = "multiselect"
-	QuestionTypeBMICalculator  QuestionType = "bmi_calculator"
+	QuestionTypeBMICalculator       QuestionType = "bmi_calculator"
+	QuestionTypePackYearsCalculator QuestionType = "pack_years_calculator"
 )
 
 // SkipRule defines a condition that hides subsequent questions based on an answer value.
@@ -30,7 +31,7 @@ type SkipRule struct {
 type Question struct {
 	QuestionID   string                 `bson:"question_id" json:"id"`
 	QuestionText string                 `bson:"question_text" json:"question_text" validate:"required,min=5"`
-	QuestionType QuestionType           `bson:"question_type" json:"question_type" validate:"required,oneof=multiple_choice likert_scale free_text yes_no number multiselect bmi_calculator"`
+	QuestionType QuestionType           `bson:"question_type" json:"question_type" validate:"required,oneof=multiple_choice likert_scale free_text yes_no number multiselect bmi_calculator pack_years_calculator"`
 	ImageURL      string                 `bson:"image_url,omitempty" json:"image_url,omitempty"`
 	Options       map[string]interface{} `bson:"options,omitempty" json:"options,omitempty"`
 	OrderIndex    int                    `bson:"order_index" json:"order_index" validate:"min=0"`

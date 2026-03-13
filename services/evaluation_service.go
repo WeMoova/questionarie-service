@@ -79,8 +79,8 @@ func (s *EvaluationService) EvaluateAssignment(ctx context.Context, assignmentID
 
 		switch v := val.(type) {
 		case float64:
-			// For multiple_choice with choices that have scores, look up the score
-			if q.QuestionType == models.QuestionTypeMultipleChoice {
+			// For multiple_choice/calculator types with choices that have scores, look up the score
+			if q.QuestionType == models.QuestionTypeMultipleChoice || q.QuestionType == models.QuestionTypeBMICalculator || q.QuestionType == models.QuestionTypePackYearsCalculator {
 				if score, ok := lookupChoiceScore(q.Options, v, ""); ok {
 					responseValues[r.QuestionID] = score
 					continue
