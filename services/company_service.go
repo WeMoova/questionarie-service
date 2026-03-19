@@ -868,6 +868,31 @@ func (s *CompanyService) UpdateCompanyFusionAuth(ctx context.Context, id primiti
 	return s.companyRepo.Update(ctx, id, company)
 }
 
+// UpdateCompanySubscription saves the subscription (plan + add-ons + snapshot) for a company.
+func (s *CompanyService) UpdateCompanySubscription(ctx context.Context, id primitive.ObjectID, sub *models.CompanySubscription) error {
+	company, err := s.companyRepo.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	// Set snapshot date if not already set
+	if sub.PriceSnapshot.SnapshotDate.IsZero() {
+		sub.PriceSnapshot.SnapshotDate = time.Now()
+	}
+
+	// Ensure add_on_slugs is never nil
+	if sub.AddOnSlugs == nil {
+		sub.AddOnSlugs = []string{}
+	}
+	if sub.PriceSnapshot.AddOnDetails == nil {
+		sub.PriceSnapshot.AddOnDetails = []models.AddOnSnapshot{}
+	}
+
+	company.Subscription = sub
+	company.UpdatedAt = time.Now()
+	return s.companyRepo.Update(ctx, id, company)
+}
+
 func (s *CompanyService) GetCompanyStats(ctx context.Context, companyID primitive.ObjectID) (map[string]interface{}, error) {
 	company, err := s.companyRepo.GetByID(ctx, companyID)
 	if err != nil {

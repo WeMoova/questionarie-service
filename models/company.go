@@ -53,8 +53,42 @@ type Company struct {
 	FusionAuthClientID      string `bson:"fusionauth_client_id,omitempty" json:"fusionauth_client_id,omitempty"`
 	FusionAuthClientSecret  string `bson:"fusionauth_client_secret,omitempty" json:"fusionauth_client_secret,omitempty"`
 
+	// Subscription — plan, add-ons, and frozen price snapshot
+	Subscription *CompanySubscription `bson:"subscription,omitempty" json:"subscription,omitempty"`
+
 	// Transient field — not persisted, populated by service layer
 	QuestionnaireCount int `bson:"-" json:"questionnaire_count"`
+}
+
+// CompanySubscription holds the contracted plan, add-ons and price snapshot
+type CompanySubscription struct {
+	PlanSlug      string        `bson:"plan_slug" json:"plan_slug"`
+	PlanName      string        `bson:"plan_name" json:"plan_name"`
+	AddOnSlugs    []string      `bson:"add_on_slugs" json:"add_on_slugs"`
+	ContractType  string        `bson:"contract_type" json:"contract_type"` // "mensual" | "anual"
+	PriceSnapshot PriceSnapshot `bson:"price_snapshot" json:"price_snapshot"`
+	StartDate     *time.Time    `bson:"start_date,omitempty" json:"start_date,omitempty"`
+	Notes         string        `bson:"notes,omitempty" json:"notes,omitempty"`
+}
+
+// PriceSnapshot freezes the pricing at the moment of assignment for billing
+type PriceSnapshot struct {
+	UfValueCLP      float64         `bson:"uf_value_clp" json:"uf_value_clp"`
+	PlanPriceUf     float64         `bson:"plan_price_uf" json:"plan_price_uf"`
+	AddOnsPriceUf   float64         `bson:"add_ons_price_uf" json:"add_ons_price_uf"`
+	SetupFeeUf      float64         `bson:"setup_fee_uf" json:"setup_fee_uf"`
+	DiscountPercent float64         `bson:"discount_percent" json:"discount_percent"`
+	TotalMonthlyUf  float64         `bson:"total_monthly_uf" json:"total_monthly_uf"`
+	TotalMonthlyCLP float64         `bson:"total_monthly_clp" json:"total_monthly_clp"`
+	SnapshotDate    time.Time       `bson:"snapshot_date" json:"snapshot_date"`
+	AddOnDetails    []AddOnSnapshot `bson:"add_on_details" json:"add_on_details"`
+}
+
+// AddOnSnapshot captures individual add-on pricing at snapshot time
+type AddOnSnapshot struct {
+	Slug    string  `bson:"slug" json:"slug"`
+	Name    string  `bson:"name" json:"name"`
+	PriceUf float64 `bson:"price_uf" json:"price_uf"`
 }
 
 // NewCompany creates a new Company with timestamps

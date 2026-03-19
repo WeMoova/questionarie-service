@@ -37,11 +37,12 @@ func NewCompanyHandler(service *services.CompanyService, fusionAuthService *serv
 // CreateCompany handles POST /api/v1/companies
 func (h *CompanyHandler) CreateCompany(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name         string                 `json:"name"`
-		IsActive     *bool                  `json:"is_active"`
-		Branding     *models.Branding       `json:"branding"`
-		CustomDomain *models.CustomDomain   `json:"custom_domain"`
-		Settings     *models.CompanySettings `json:"settings"`
+		Name         string                      `json:"name"`
+		IsActive     *bool                       `json:"is_active"`
+		Branding     *models.Branding            `json:"branding"`
+		CustomDomain *models.CustomDomain        `json:"custom_domain"`
+		Settings     *models.CompanySettings     `json:"settings"`
+		Subscription *models.CompanySubscription `json:"subscription"`
 	}
 
 	if err := utils.ParseRequestBody(r, &req); err != nil {
@@ -76,6 +77,15 @@ func (h *CompanyHandler) CreateCompany(w http.ResponseWriter, r *http.Request) {
 				company.FusionAuthClientID = result.ClientID
 				company.FusionAuthClientSecret = result.ClientSecret
 			}
+		}
+	}
+
+	// Save subscription if provided
+	if req.Subscription != nil {
+		if err := h.service.UpdateCompanySubscription(r.Context(), company.ID, req.Subscription); err != nil {
+			slog.Error("failed to save subscription", "company_id", company.ID.Hex(), "error", err)
+		} else {
+			company.Subscription = req.Subscription
 		}
 	}
 
@@ -142,11 +152,12 @@ func (h *CompanyHandler) UpdateCompany(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Name         string                 `json:"name"`
-		IsActive     *bool                  `json:"is_active"`
-		Branding     *models.Branding       `json:"branding"`
-		CustomDomain *models.CustomDomain   `json:"custom_domain"`
-		Settings     *models.CompanySettings `json:"settings"`
+		Name         string                      `json:"name"`
+		IsActive     *bool                       `json:"is_active"`
+		Branding     *models.Branding            `json:"branding"`
+		CustomDomain *models.CustomDomain        `json:"custom_domain"`
+		Settings     *models.CompanySettings     `json:"settings"`
+		Subscription *models.CompanySubscription `json:"subscription"`
 	}
 
 	if err := utils.ParseRequestBody(r, &req); err != nil {
@@ -158,6 +169,13 @@ func (h *CompanyHandler) UpdateCompany(w http.ResponseWriter, r *http.Request) {
 		slog.Error("UpdateCompany failed", "company_id", id.Hex(), "error", err.Error())
 		utils.HandleRepositoryError(w, err)
 		return
+	}
+
+	// Save subscription if provided
+	if req.Subscription != nil {
+		if err := h.service.UpdateCompanySubscription(r.Context(), id, req.Subscription); err != nil {
+			slog.Error("failed to save subscription on update", "company_id", id.Hex(), "error", err)
+		}
 	}
 
 	// Create FusionAuth tenant if company now has a slug but no tenant yet
