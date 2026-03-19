@@ -74,6 +74,7 @@ func main() {
 	gamificationRepo := repository.NewGamificationRepository(mongodb.Database)
 	apiTokenRepo := repository.NewAPITokenRepository(mongodb.Database)
 	adminSettingsRepo := repository.NewAdminSettingsRepository(mongodb.Database)
+	pricingConfigRepo := repository.NewPricingConfigRepository(mongodb.Database)
 
 	// Seed default gamification data
 	if err := gamificationRepo.SeedDefaultData(context.Background()); err != nil {
@@ -108,6 +109,7 @@ func main() {
 	apiTokenHandler := handlers.NewAPITokenHandler(apiTokenService)
 	companyAPIHandler := handlers.NewCompanyAPIHandler(reportService)
 	adminSettingsHandler := handlers.NewAdminSettingsHandler(adminSettingsRepo)
+	pricingConfigHandler := handlers.NewPricingConfigHandler(pricingConfigRepo)
 	publicLinkHandler := handlers.NewPublicLinkHandler(publicLinkService)
 	publicQHandler := handlers.NewPublicQuestionnaireHandler(publicLinkService)
 
@@ -216,6 +218,9 @@ func main() {
 		// Public admin settings (no auth — admin app pre-login branding)
 		r.Get("/api/v1/public/admin-settings", adminSettingsHandler.GetSettings)
 
+		// Public pricing config (no auth — public website pricing page)
+		r.Get("/api/v1/public/pricing-config", pricingConfigHandler.GetConfig)
+
 		// Internal service-to-service endpoints (no JWT — cluster-internal only)
 		r.Post("/api/v1/internal/validate-api-token", apiTokenHandler.ValidateAPIToken)
 
@@ -303,6 +308,10 @@ func main() {
 				r.Post("/api/v1/questionnaire-categories", categoryHandler.CreateCategory)
 				r.Put("/api/v1/questionnaire-categories/{id}", categoryHandler.UpdateCategory)
 				r.Delete("/api/v1/questionnaire-categories/{id}", categoryHandler.DeleteCategory)
+
+				// Pricing Config (admin)
+				r.Get("/api/v1/admin/pricing-config", pricingConfigHandler.GetConfig)
+				r.Put("/api/v1/admin/pricing-config", pricingConfigHandler.UpdateConfig)
 
 				// Admin Settings
 				r.Get("/api/v1/admin/settings", adminSettingsHandler.GetSettingsFull)
