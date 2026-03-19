@@ -110,6 +110,7 @@ func main() {
 	companyAPIHandler := handlers.NewCompanyAPIHandler(reportService)
 	adminSettingsHandler := handlers.NewAdminSettingsHandler(adminSettingsRepo)
 	pricingConfigHandler := handlers.NewPricingConfigHandler(pricingConfigRepo)
+	publicCatalogHandler := handlers.NewPublicCatalogHandler(questionnaireRepo, categoryRepo)
 	publicLinkHandler := handlers.NewPublicLinkHandler(publicLinkService)
 	publicQHandler := handlers.NewPublicQuestionnaireHandler(publicLinkService)
 
@@ -220,6 +221,11 @@ func main() {
 
 		// Public pricing config (no auth — public website pricing page)
 		r.Get("/api/v1/public/pricing-config", pricingConfigHandler.GetConfig)
+
+		// Public questionnaire catalog (no auth — public website instruments page)
+		r.Get("/api/v1/public/questionnaires", publicCatalogHandler.GetPublicQuestionnaires)
+		r.Get("/api/v1/public/questionnaires/{id}", publicCatalogHandler.GetPublicQuestionnaireByID)
+		r.Get("/api/v1/public/questionnaire-categories", publicCatalogHandler.GetPublicCategories)
 
 		// Internal service-to-service endpoints (no JWT — cluster-internal only)
 		r.Post("/api/v1/internal/validate-api-token", apiTokenHandler.ValidateAPIToken)
