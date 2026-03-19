@@ -4,14 +4,21 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"net/mail"
 	"questionarie-service/middleware"
 	"questionarie-service/models"
 	"questionarie-service/repository"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
+
+func isValidEmail(email string) bool {
+	_, err := mail.ParseAddress(email)
+	return err == nil
+}
 
 // slugRegex is declared in cloudflare_service.go (same package).
 
@@ -400,12 +407,36 @@ func (s *PublicLinkService) StartAnonymousSession(ctx context.Context, slug stri
 		}
 	}
 
-	// Validate required demographic fields.
+	// Validate required demographic fields and field types.
 	for _, field := range link.DemographicFields {
+		val, ok := demographicData[field.Key]
 		if field.Required {
-			val, ok := demographicData[field.Key]
-			if !ok || val == "" {
+			if !ok || strings.TrimSpace(val) == "" {
 				return nil, fmt.Errorf("required demographic field '%s' is missing", field.Label)
+			}
+		}
+		// Type-based validation (only if value is non-empty).
+		if ok && val != "" {
+			switch field.Type {
+			case "email":
+				if !isValidEmail(val) {
+					return nil, fmt.Errorf("el campo '%s' no tiene un formato de email valido", field.Label)
+				}
+			case "phone":
+				cleaned := strings.Map(func(r rune) rune {
+					if r >= '0' && r <= '9' || r == '+' {
+						return r
+					}
+					return -1
+				}, val)
+				if len(cleaned) < 8 || len(cleaned) > 16 {
+					return nil, fmt.Errorf("el campo '%s' no tiene un formato de telefono valido", field.Label)
+				}
+			case "rut":
+				cleaned := strings.ReplaceAll(strings.ReplaceAll(val, ".", ""), " ", "")
+				if len(cleaned) < 8 || len(cleaned) > 12 {
+					return nil, fmt.Errorf("el campo '%s' no tiene un formato de RUT valido", field.Label)
+				}
 			}
 		}
 	}

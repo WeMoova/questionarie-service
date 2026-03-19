@@ -10,6 +10,7 @@ type DemographicField struct {
 	Key      string `bson:"key" json:"key" validate:"required"`
 	Label    string `bson:"label" json:"label" validate:"required"`
 	Required bool   `bson:"required" json:"required"`
+	Type     string `bson:"type,omitempty" json:"type,omitempty"` // text, email, phone, rut, number — defaults to "text"
 }
 
 type ScoreRange struct {
