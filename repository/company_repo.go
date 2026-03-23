@@ -84,6 +84,9 @@ func (r *CompanyRepository) Update(ctx context.Context, id primitive.ObjectID, c
 	if company.Settings != nil {
 		setFields["settings"] = company.Settings
 	}
+	if company.Subscription != nil {
+		setFields["subscription"] = company.Subscription
+	}
 	if company.FusionAuthTenantID != "" {
 		setFields["fusionauth_tenant_id"] = company.FusionAuthTenantID
 	}
