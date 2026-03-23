@@ -62,6 +62,11 @@ func (h *PricingConfigHandler) UpdateConfig(w http.ResponseWriter, r *http.Reque
 		config.UfValueCLP = uf.Value
 	}
 
+	// Auto-calculate price_clp for setup fees based on current UF
+	for i := range config.SetupFees {
+		config.SetupFees[i].PriceCLP = config.SetupFees[i].PriceUf * config.UfValueCLP
+	}
+
 	if err := h.repo.Update(r.Context(), &config, claims.Sub); err != nil {
 		utils.HandleRepositoryError(w, err)
 		return
