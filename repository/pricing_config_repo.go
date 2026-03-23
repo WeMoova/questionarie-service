@@ -61,6 +61,21 @@ func (r *PricingConfigRepository) Update(ctx context.Context, config *models.Pri
 	return nil
 }
 
+// UpdateUFValue updates only the uf_value_clp field in the pricing config.
+func (r *PricingConfigRepository) UpdateUFValue(ctx context.Context, ufValue float64) error {
+	update := bson.M{
+		"$set": bson.M{
+			"uf_value_clp": ufValue,
+			"updated_at":   time.Now(),
+		},
+	}
+	_, err := r.collection.UpdateOne(ctx, bson.M{}, update)
+	if err != nil {
+		return fmt.Errorf("failed to update UF value: %w", err)
+	}
+	return nil
+}
+
 func seedDefaultPricingConfig() *models.PricingConfig {
 	now := time.Now()
 	e15 := 15

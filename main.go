@@ -222,6 +222,9 @@ func main() {
 		// Public pricing config (no auth — public website pricing page)
 		r.Get("/api/v1/public/pricing-config", pricingConfigHandler.GetConfig)
 
+		// Public UF value from CMF Chile API (no auth)
+		r.Get("/api/v1/public/uf-value", pricingConfigHandler.GetUFValue)
+
 		// Public questionnaire catalog (no auth — public website instruments page)
 		r.Get("/api/v1/public/questionnaires", publicCatalogHandler.GetPublicQuestionnaires)
 		r.Get("/api/v1/public/questionnaires/{id}", publicCatalogHandler.GetPublicQuestionnaireByID)
