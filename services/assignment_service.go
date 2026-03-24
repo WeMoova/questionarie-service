@@ -487,10 +487,7 @@ func (s *AssignmentService) SubmitAssignment(ctx context.Context, assignmentID p
 					}
 					for _, rp := range questionnaire.EvaluationConfig.RiskProfiles {
 						if checkRiskConditions(rp.Conditions, rp.Logic, dimScores, dimLevels, qResp) {
-							evalResult.RiskProfileName = rp.Name
-							evalResult.RiskProfileLabel = rp.Label
-							evalResult.RiskProfileSeverity = rp.Severity
-							evalResult.RiskProfileColor = rp.Color
+							applyRiskProfileToResult(evalResult, rp.Name, questionnaire.EvaluationConfig.RiskProfiles)
 							break
 						}
 					}

@@ -290,15 +290,7 @@ func (s *PublicLinkService) GetLinkReport(ctx context.Context, linkID primitive.
 				if hasRiskProfiles {
 					profileName := s.findMatchingRiskProfileName(evalResult, q.EvaluationConfig, a, q.Questions)
 					if profileName != "" {
-						evalResult.RiskProfileName = profileName
-						for _, rp := range q.EvaluationConfig.RiskProfiles {
-							if rp.Name == profileName {
-								evalResult.RiskProfileLabel = rp.Label
-								evalResult.RiskProfileSeverity = rp.Severity
-								evalResult.RiskProfileColor = rp.Color
-								break
-							}
-						}
+						applyRiskProfileToResult(evalResult, profileName, q.EvaluationConfig.RiskProfiles)
 					}
 				}
 				a.EvaluationResult = evalResult
@@ -313,15 +305,7 @@ func (s *PublicLinkService) GetLinkReport(ctx context.Context, linkID primitive.
 		if hasRiskProfiles && a.EvaluationResult != nil && a.EvaluationResult.RiskProfileName == "" {
 			profileName := s.findMatchingRiskProfileName(a.EvaluationResult, q.EvaluationConfig, a, q.Questions)
 			if profileName != "" {
-				a.EvaluationResult.RiskProfileName = profileName
-				for _, rp := range q.EvaluationConfig.RiskProfiles {
-					if rp.Name == profileName {
-						a.EvaluationResult.RiskProfileLabel = rp.Label
-						a.EvaluationResult.RiskProfileSeverity = rp.Severity
-						a.EvaluationResult.RiskProfileColor = rp.Color
-						break
-					}
-				}
+				applyRiskProfileToResult(a.EvaluationResult, profileName, q.EvaluationConfig.RiskProfiles)
 			}
 		}
 
@@ -618,16 +602,7 @@ func (s *PublicLinkService) SubmitAnonymous(ctx context.Context, claims *middlew
 			if qErr == nil && q.EvaluationConfig != nil && len(q.EvaluationConfig.RiskProfiles) > 0 {
 				profileName := s.findMatchingRiskProfileName(evalResult, q.EvaluationConfig, assignment, q.Questions)
 				if profileName != "" {
-					evalResult.RiskProfileName = profileName
-					// Copy label/severity/color from the profile definition
-					for _, rp := range q.EvaluationConfig.RiskProfiles {
-						if rp.Name == profileName {
-							evalResult.RiskProfileLabel = rp.Label
-							evalResult.RiskProfileSeverity = rp.Severity
-							evalResult.RiskProfileColor = rp.Color
-							break
-						}
-					}
+					applyRiskProfileToResult(evalResult, profileName, q.EvaluationConfig.RiskProfiles)
 				}
 			}
 			if err := s.assignmentRepo.SetEvaluationResult(ctx, assignmentID, evalResult); err != nil {
@@ -879,6 +854,27 @@ func (s *PublicLinkService) evaluateRiskProfile(ctx context.Context, assignment 
 	}
 
 	return nil
+}
+
+// applyRiskProfileToResult sets risk profile fields on an EvaluationResult.
+// Uses the profile's Label, falling back to a capitalized Name if Label is empty.
+func applyRiskProfileToResult(evalResult *models.EvaluationResult, profileName string, profiles []models.RiskProfile) {
+	evalResult.RiskProfileName = profileName
+	for _, rp := range profiles {
+		if rp.Name == profileName {
+			label := rp.Label
+			if label == "" {
+				// Capitalize first letter of name as fallback
+				label = strings.ToUpper(profileName[:1]) + profileName[1:]
+			}
+			evalResult.RiskProfileLabel = label
+			evalResult.RiskProfileSeverity = rp.Severity
+			evalResult.RiskProfileColor = rp.Color
+			return
+		}
+	}
+	// Profile definition not found — use name as label
+	evalResult.RiskProfileLabel = strings.ToUpper(profileName[:1]) + profileName[1:]
 }
 
 // findMatchingRiskProfileName uses an already-computed EvaluationResult to find
