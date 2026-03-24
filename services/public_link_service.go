@@ -270,18 +270,43 @@ func (s *PublicLinkService) GetLinkReport(ctx context.Context, linkID primitive.
 	}
 
 	// 6. Build individual responses
-	// For backward compat: compute risk profile on-the-fly for assignments
-	// that have evaluation results but no risk_profile_name yet.
-	var hasRiskProfiles bool
-	if q.EvaluationConfig != nil && len(q.EvaluationConfig.RiskProfiles) > 0 {
-		hasRiskProfiles = true
-	}
+	// Backward compat: compute evaluation + risk profile on-the-fly for
+	// completed assignments that have no evaluation_result (old anonymous data).
+	hasEvalConfig := q.EvaluationConfig != nil && q.EvaluationConfig.Enabled
+	hasRiskProfiles := hasEvalConfig && len(q.EvaluationConfig.RiskProfiles) > 0
 
 	var responses []map[string]interface{}
 	for _, a := range assignments {
 		answers := make(map[string]string, len(a.Responses))
 		for _, resp := range a.Responses {
 			answers[resp.QuestionID] = resp.GetStringValue()
+		}
+
+		// Backfill: compute full evaluation for completed assignments with no result
+		if hasEvalConfig && a.Status == models.AssignmentStatusCompleted && a.EvaluationResult == nil && len(a.Responses) > 0 {
+			evalResult, err := s.evaluationService.EvaluateAssignment(ctx, a.ID, cq.QuestionnaireID)
+			if err == nil && evalResult != nil {
+				// Resolve risk profile
+				if hasRiskProfiles {
+					profileName := s.findMatchingRiskProfileName(evalResult, q.EvaluationConfig, a, q.Questions)
+					if profileName != "" {
+						evalResult.RiskProfileName = profileName
+						for _, rp := range q.EvaluationConfig.RiskProfiles {
+							if rp.Name == profileName {
+								evalResult.RiskProfileLabel = rp.Label
+								evalResult.RiskProfileSeverity = rp.Severity
+								evalResult.RiskProfileColor = rp.Color
+								break
+							}
+						}
+					}
+				}
+				a.EvaluationResult = evalResult
+				// Persist so we don't recompute next time (fire and forget)
+				go func(aid primitive.ObjectID, er *models.EvaluationResult) {
+					_ = s.assignmentRepo.SetEvaluationResult(context.Background(), aid, er)
+				}(a.ID, evalResult)
+			}
 		}
 
 		// Backfill risk profile if evaluation exists but profile name is missing
