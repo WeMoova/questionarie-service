@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math"
 	"net/mail"
 	"questionarie-service/middleware"
@@ -29,6 +30,7 @@ type PublicLinkService struct {
 	cqRepo            *repository.CompanyQuestionnaireRepository
 	questionnaireRepo *repository.QuestionnaireRepository
 	companyRepo       *repository.CompanyRepository
+	evaluationService *EvaluationService
 }
 
 // NewPublicLinkService creates a new PublicLinkService.
@@ -45,6 +47,7 @@ func NewPublicLinkService(
 		cqRepo:            cqRepo,
 		questionnaireRepo: questionnaireRepo,
 		companyRepo:       companyRepo,
+		evaluationService: NewEvaluationService(questionnaireRepo, assignmentRepo),
 	}
 }
 
@@ -267,11 +270,34 @@ func (s *PublicLinkService) GetLinkReport(ctx context.Context, linkID primitive.
 	}
 
 	// 6. Build individual responses
+	// For backward compat: compute risk profile on-the-fly for assignments
+	// that have evaluation results but no risk_profile_name yet.
+	var hasRiskProfiles bool
+	if q.EvaluationConfig != nil && len(q.EvaluationConfig.RiskProfiles) > 0 {
+		hasRiskProfiles = true
+	}
+
 	var responses []map[string]interface{}
 	for _, a := range assignments {
 		answers := make(map[string]string, len(a.Responses))
 		for _, resp := range a.Responses {
 			answers[resp.QuestionID] = resp.GetStringValue()
+		}
+
+		// Backfill risk profile if evaluation exists but profile name is missing
+		if hasRiskProfiles && a.EvaluationResult != nil && a.EvaluationResult.RiskProfileName == "" {
+			profileName := s.findMatchingRiskProfileName(a.EvaluationResult, q.EvaluationConfig, a, q.Questions)
+			if profileName != "" {
+				a.EvaluationResult.RiskProfileName = profileName
+				for _, rp := range q.EvaluationConfig.RiskProfiles {
+					if rp.Name == profileName {
+						a.EvaluationResult.RiskProfileLabel = rp.Label
+						a.EvaluationResult.RiskProfileSeverity = rp.Severity
+						a.EvaluationResult.RiskProfileColor = rp.Color
+						break
+					}
+				}
+			}
 		}
 
 		entry := map[string]interface{}{
@@ -555,6 +581,36 @@ func (s *PublicLinkService) SubmitAnonymous(ctx context.Context, claims *middlew
 		return nil, fmt.Errorf("link not found: %w", err)
 	}
 
+	// Run evaluation and persist result (dimension scores + risk profile name).
+	cq, cqErr := s.cqRepo.GetByID(ctx, link.CompanyQuestionnaireID)
+	if cqErr == nil {
+		evalResult, evalErr := s.evaluationService.EvaluateAssignment(ctx, assignmentID, cq.QuestionnaireID)
+		if evalErr != nil {
+			slog.Error("anonymous evaluation failed", "assignment_id", assignmentID.Hex(), "error", evalErr)
+		} else if evalResult != nil {
+			// Determine which risk profile matches this response
+			q, qErr := s.questionnaireRepo.GetByID(ctx, cq.QuestionnaireID)
+			if qErr == nil && q.EvaluationConfig != nil && len(q.EvaluationConfig.RiskProfiles) > 0 {
+				profileName := s.findMatchingRiskProfileName(evalResult, q.EvaluationConfig, assignment, q.Questions)
+				if profileName != "" {
+					evalResult.RiskProfileName = profileName
+					// Copy label/severity/color from the profile definition
+					for _, rp := range q.EvaluationConfig.RiskProfiles {
+						if rp.Name == profileName {
+							evalResult.RiskProfileLabel = rp.Label
+							evalResult.RiskProfileSeverity = rp.Severity
+							evalResult.RiskProfileColor = rp.Color
+							break
+						}
+					}
+				}
+			}
+			if err := s.assignmentRepo.SetEvaluationResult(ctx, assignmentID, evalResult); err != nil {
+				slog.Error("failed to store anonymous evaluation result", "assignment_id", assignmentID.Hex(), "error", err)
+			}
+		}
+	}
+
 	result := map[string]any{
 		"result_config": link.ResultConfig,
 	}
@@ -798,6 +854,42 @@ func (s *PublicLinkService) evaluateRiskProfile(ctx context.Context, assignment 
 	}
 
 	return nil
+}
+
+// findMatchingRiskProfileName uses an already-computed EvaluationResult to find
+// which risk profile matches. This avoids duplicating all the scoring logic.
+func (s *PublicLinkService) findMatchingRiskProfileName(
+	evalResult *models.EvaluationResult,
+	evalConfig *models.EvaluationConfig,
+	assignment *models.UserQuestionnaireAssignment,
+	questions []models.Question,
+) string {
+	// Build dimension scores/levels from EvaluationResult
+	dimScores := make(map[string]float64)
+	dimLevels := make(map[string]string)
+	for _, ds := range evalResult.DimensionScores {
+		dimScores[ds.DimensionCode] = ds.RawScore
+		dimLevels[ds.DimensionCode] = ds.Level
+	}
+
+	// Build question responses by order_index
+	questionMap := make(map[string]models.Question)
+	for _, q := range questions {
+		questionMap[q.QuestionID] = q
+	}
+	questionResponses := make(map[int]string)
+	for _, r := range assignment.Responses {
+		if q, ok := questionMap[r.QuestionID]; ok {
+			questionResponses[q.OrderIndex] = r.GetStringValue()
+		}
+	}
+
+	for _, profile := range evalConfig.RiskProfiles {
+		if checkRiskConditions(profile.Conditions, profile.Logic, dimScores, dimLevels, questionResponses) {
+			return profile.Name
+		}
+	}
+	return ""
 }
 
 // checkRiskConditions evaluates a list of conditions with the given logic ("all"/"any").

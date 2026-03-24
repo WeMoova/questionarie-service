@@ -467,6 +467,34 @@ func (s *AssignmentService) SubmitAssignment(ctx context.Context, assignmentID p
 			if err != nil {
 				slog.Error("evaluation failed", "assignment_id", assignmentID.Hex(), "error", err)
 			} else if evalResult != nil {
+				// Determine risk profile if configured
+				if questionnaire.EvaluationConfig != nil && len(questionnaire.EvaluationConfig.RiskProfiles) > 0 {
+					dimScores := make(map[string]float64)
+					dimLevels := make(map[string]string)
+					for _, ds := range evalResult.DimensionScores {
+						dimScores[ds.DimensionCode] = ds.RawScore
+						dimLevels[ds.DimensionCode] = ds.Level
+					}
+					qMap := make(map[string]models.Question)
+					for _, q := range questionnaire.Questions {
+						qMap[q.QuestionID] = q
+					}
+					qResp := make(map[int]string)
+					for _, r := range assignment.Responses {
+						if q, ok := qMap[r.QuestionID]; ok {
+							qResp[q.OrderIndex] = r.GetStringValue()
+						}
+					}
+					for _, rp := range questionnaire.EvaluationConfig.RiskProfiles {
+						if checkRiskConditions(rp.Conditions, rp.Logic, dimScores, dimLevels, qResp) {
+							evalResult.RiskProfileName = rp.Name
+							evalResult.RiskProfileLabel = rp.Label
+							evalResult.RiskProfileSeverity = rp.Severity
+							evalResult.RiskProfileColor = rp.Color
+							break
+						}
+					}
+				}
 				if err := s.assignmentRepo.SetEvaluationResult(bgCtx, assignmentID, evalResult); err != nil {
 					slog.Error("failed to store evaluation result", "assignment_id", assignmentID.Hex(), "error", err)
 				}

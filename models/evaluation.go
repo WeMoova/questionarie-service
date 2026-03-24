@@ -18,5 +18,9 @@ type DimensionScore struct {
 type EvaluationResult struct {
 	DimensionScores       []DimensionScore `bson:"dimension_scores" json:"dimension_scores"`
 	GeneralInterpretation string           `bson:"general_interpretation,omitempty" json:"general_interpretation,omitempty"`
+	RiskProfileName       string           `bson:"risk_profile_name,omitempty" json:"risk_profile_name,omitempty"`
+	RiskProfileLabel      string           `bson:"risk_profile_label,omitempty" json:"risk_profile_label,omitempty"`
+	RiskProfileSeverity   string           `bson:"risk_profile_severity,omitempty" json:"risk_profile_severity,omitempty"`
+	RiskProfileColor      string           `bson:"risk_profile_color,omitempty" json:"risk_profile_color,omitempty"`
 	EvaluatedAt           time.Time        `bson:"evaluated_at" json:"evaluated_at"`
 }
