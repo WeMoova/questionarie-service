@@ -142,9 +142,8 @@ func (r *CompanyQuestionnaireRepository) Update(ctx context.Context, id primitiv
 			"is_active":             cq.IsActive,
 			"status":                cq.Status,
 			"status_history":        cq.StatusHistory,
-			"display_mode":          cq.DisplayMode,
-			"superset_dashboard_id": cq.SupersetDashboardID,
-			"show_instructions":     cq.ShowInstructions,
+			"display_mode":      cq.DisplayMode,
+			"show_instructions": cq.ShowInstructions,
 		},
 	}
 

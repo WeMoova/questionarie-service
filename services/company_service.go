@@ -465,7 +465,7 @@ func (s *CompanyService) GetActiveCompanyQuestionnaires(ctx context.Context, com
 }
 
 // UpdateCompanyQuestionnaire updates a company questionnaire assignment period
-func (s *CompanyService) UpdateCompanyQuestionnaire(ctx context.Context, id primitive.ObjectID, periodStart, periodEnd time.Time, isActive bool, displayMode string, supersetDashboardID *string, showInstructions *bool, userID string, isSuperAdmin bool) error {
+func (s *CompanyService) UpdateCompanyQuestionnaire(ctx context.Context, id primitive.ObjectID, periodStart, periodEnd time.Time, isActive bool, displayMode string, showInstructions *bool, userID string, isSuperAdmin bool) error {
 	cq, err := s.companyQuestionnaireRepo.GetByID(ctx, id)
 	if err != nil {
 		return err
@@ -493,10 +493,6 @@ func (s *CompanyService) UpdateCompanyQuestionnaire(ctx context.Context, id prim
 
 	if displayMode != "" {
 		cq.DisplayMode = models.DisplayMode(displayMode)
-	}
-
-	if supersetDashboardID != nil {
-		cq.SupersetDashboardID = *supersetDashboardID
 	}
 
 	if showInstructions != nil {
